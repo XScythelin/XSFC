@@ -2,6 +2,7 @@
 
 #include "Model.h"
 #include "EscDriver.h"
+#include "EscBeacon.hpp"
 
 namespace Xsfc {
 
@@ -30,6 +31,7 @@ class Mixer
 
     EscDriver escMotor;
     EscDriver escServo;
+    EscBeacon _beacon;
     uint32_t _statsCounter;
     uint32_t _statsCounterMax;
     float _erpmToHz;

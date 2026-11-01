@@ -1,4 +1,6 @@
-#if defined(ESP32) || defined(ESP8266)
+#include "Target/Target.h"
+
+#if defined(XSFC_ESPNOW)
 
 #include "InputEspNow.h"
 #include "Utils/MemoryHelper.h"

@@ -19,6 +19,12 @@
 #ifdef XSFC_SERIAL_USB
   static Xsfc::Device::SerialDeviceAdapter<XSFC_SERIAL_USB_DEV_T> _usb(XSFC_SERIAL_USB_DEV);
 #endif
+#ifdef XSFC_SERIAL_3
+  static Xsfc::Device::SerialDeviceAdapter<XSFC_SERIAL_3_DEV_T> _uart3(XSFC_SERIAL_3_DEV);
+#endif
+#ifdef XSFC_SERIAL_4
+  static Xsfc::Device::SerialDeviceAdapter<XSFC_SERIAL_4_DEV_T> _uart4(XSFC_SERIAL_4_DEV);
+#endif
 
 namespace Xsfc {
 
@@ -239,6 +245,12 @@ Device::SerialDevice * SerialManager::getSerialPortById(SerialPort portId)
 #endif
 #ifdef XSFC_SERIAL_2
     case SERIAL_UART_2: return &_uart2;
+#endif
+#ifdef XSFC_SERIAL_3
+    case SERIAL_UART_3: return &_uart3;
+#endif
+#ifdef XSFC_SERIAL_4
+    case SERIAL_UART_4: return &_uart4;
 #endif
 #ifdef XSFC_SERIAL_USB
     case SERIAL_USB: return &_usb;

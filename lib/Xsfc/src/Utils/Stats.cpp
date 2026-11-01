@@ -16,6 +16,7 @@ Stats::Stats(): _loop_last(0), _loop_time(0)
     _sum[i] = 0;
     _count[i] = 0;
     _freq[i] = 0;
+    _real[i] = 0;
   }
 }
 
@@ -109,6 +110,7 @@ float Stats::getCpuLoad() const
   float cpu1 = getLoad(COUNTER_CPU_1);
   float maxLoad = std::max(cpu0, cpu1);
   float minLoad = std::min(cpu0, cpu1);
+  if(minLoad + maxLoad <= 0.f) return 0.f;
   float alpha = maxLoad / (minLoad + maxLoad);
   return alpha * maxLoad + (1.f - alpha) * minLoad;
 }

@@ -25,8 +25,15 @@ int GyroSensor::begin()
   _gyro = _model.state.gyro.dev;
   if (!_gyro) return 0;
 
-  _gyro->setDLPFMode(_model.config.gyro.dlpf);
+  _gyro->setDLPFMode(_gyro->resolveDLPFMode(_model.config.gyro.dlpf));
   _gyro->setRate(_gyro->getRate());
+  if(!_gyro->ready())
+  {
+    _model.state.gyro.present = false;
+    _model.state.accel.present = false;
+    _model.logger.info().logln(F("GYRO configuration failed; arming blocked"));
+    return 0;
+  }
   _model.state.gyro.scale = Utils::toRad(2000.f) / 32768.f;
 
   _model.state.gyro.calibrationState = CALIBRATION_START; // calibrate gyro on start
@@ -71,7 +78,7 @@ int FAST_CODE_ATTR GyroSensor::read()
 
   Utils::Stats::Measure measure(_model.state.stats, COUNTER_GYRO_READ);
 
-  _gyro->readGyro(_model.state.gyro.raw);
+  if(!_gyro->readGyro(_model.state.gyro.raw)) return 0;
 
   VectorFloat input = static_cast<VectorFloat>(_model.state.gyro.raw) * _model.state.gyro.scale;
   align(input, _model.config.gyro.align);

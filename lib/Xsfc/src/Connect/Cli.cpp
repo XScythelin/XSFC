@@ -334,7 +334,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
   const char ** fusionModeChoices        = FusionConfig::getModeNames();
   static const char * const * protocolChoices = EscDriver::getProtocolNames();
 
-  static const char* gyroDlpfChoices[]   = { PSTR("256Hz"), PSTR("188Hz"), PSTR("98Hz"), PSTR("42Hz"), PSTR("20Hz"), PSTR("10Hz"), PSTR("5Hz"), PSTR("EXPERIMENTAL"), NULL };
+  static const char* gyroDlpfChoices[]   = { PSTR("256Hz"), PSTR("188Hz"), PSTR("98Hz"), PSTR("42Hz"), PSTR("20Hz"), PSTR("10Hz"), PSTR("5Hz"), PSTR("EXPERIMENTAL"), PSTR("AUTO"), NULL };
   static const char* debugModeChoices[]  = {  PSTR("NONE"), PSTR("CYCLETIME"), PSTR("BATTERY"), PSTR("GYRO_FILTERED"), PSTR("ACCELEROMETER"), PSTR("PIDLOOP"), PSTR("GYRO_SCALED"), PSTR("RC_INTERPOLATION"),
                                               PSTR("ANGLERATE"), PSTR("ESC_SENSOR"), PSTR("SCHEDULER"), PSTR("STACK"), PSTR("ESC_SENSOR_RPM"), PSTR("ESC_SENSOR_TMP"), PSTR("ALTITUDE"), PSTR("FFT"),
                                               PSTR("FFT_TIME"), PSTR("FFT_FREQ"), PSTR("RX_FRSKY_SPI"), PSTR("RX_SFHSS_SPI"), PSTR("GYRO_RAW"), PSTR("DUAL_GYRO_RAW"), PSTR("DUAL_GYRO_DIFF"),
@@ -549,6 +549,12 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
 #ifdef XSFC_SERIAL_2
     Param(PSTR("serial_2"), &c.serial[SERIAL_UART_2]),
 #endif
+#ifdef XSFC_SERIAL_3
+    Param(PSTR("serial_3"), &c.serial[SERIAL_UART_3]),
+#endif
+#ifdef XSFC_SERIAL_4
+    Param(PSTR("serial_4"), &c.serial[SERIAL_UART_4]),
+#endif
 #ifdef XSFC_SERIAL_SOFT_0
     Param(PSTR("serial_soft_0"), &c.serial[SERIAL_SOFT_0]),
 #endif
@@ -729,6 +735,14 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
 #if defined(XSFC_SERIAL_2) && defined(XSFC_SERIAL_REMAP_PINS)
     Param(PSTR("pin_serial_2_tx"), &c.pin[PIN_SERIAL_2_TX]),
     Param(PSTR("pin_serial_2_rx"), &c.pin[PIN_SERIAL_2_RX]),
+#endif
+#if defined(XSFC_SERIAL_3) && defined(XSFC_SERIAL_REMAP_PINS)
+    Param(PSTR("pin_serial_3_tx"), &c.pin[PIN_SERIAL_3_TX]),
+    Param(PSTR("pin_serial_3_rx"), &c.pin[PIN_SERIAL_3_RX]),
+#endif
+#if defined(XSFC_SERIAL_4) && defined(XSFC_SERIAL_REMAP_PINS)
+    Param(PSTR("pin_serial_4_tx"), &c.pin[PIN_SERIAL_4_TX]),
+    Param(PSTR("pin_serial_4_rx"), &c.pin[PIN_SERIAL_4_RX]),
 #endif
 #ifdef XSFC_I2C_0
     Param(PSTR("pin_i2c_scl"), &c.pin[PIN_I2C_0_SCL]),
@@ -1070,6 +1084,19 @@ void Cli::execute(CliCmd& cmd, Stream& s)
     s.print(sizeof(ModelState));
     s.print(F(", "));
     s.println(targetFreeHeap());
+    if(_model.state.gyro.dev)
+    {
+      const auto* gyro = _model.state.gyro.dev;
+      s.printf("IMU ready: %u, read errors: %lu, consecutive: %lu, last good us: %lu\r\n",
+        static_cast<unsigned int>(gyro->ready()), static_cast<unsigned long>(gyro->readErrors()),
+        static_cast<unsigned long>(gyro->consecutiveErrors()), static_cast<unsigned long>(gyro->lastGoodReadUs()));
+    }
+    #if defined(ESP32P4)
+    s.printf("flash bytes: %lu\r\ninternal heap bytes: %lu, free: %lu\r\nPSRAM bytes: %lu, free: %lu\r\n",
+      static_cast<unsigned long>(ESP.getFlashChipSize()),
+      static_cast<unsigned long>(ESP.getHeapSize()), static_cast<unsigned long>(ESP.getFreeHeap()),
+      static_cast<unsigned long>(ESP.getPsramSize()), static_cast<unsigned long>(ESP.getFreePsram()));
+    #endif
   }
   else if(strcmp_P(cmd.args[0], PSTR("get")) == 0)
   {
@@ -1590,9 +1617,11 @@ void Cli::execute(CliCmd& cmd, Stream& s)
       {
         const auto& it = journal[i];
         const auto& itr = flashfs->journal[i];
-        s.printf("%02d: %08X : %08X / %08X : %08X\r\n",i , it.logBegin, it.logEnd, itr.logBegin, itr.logEnd);
+        s.printf("%02u: %08X : %08X / %08X : %08X\r\n", static_cast<unsigned int>(i),
+          static_cast<unsigned int>(it.logBegin), static_cast<unsigned int>(it.logEnd),
+          static_cast<unsigned int>(itr.logBegin), static_cast<unsigned int>(itr.logEnd));
       }
-      s.printf("current: %d\r\n", flashfs->journalIdx);
+      s.printf("current: %u\r\n", static_cast<unsigned int>(flashfs->journalIdx));
     }
     else if(strcmp_P(cmd.args[1], PSTR("erase")) == 0)
     {

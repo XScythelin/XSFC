@@ -3,6 +3,8 @@ Import("env")
 APP_BIN = "$BUILD_DIR/${PROGNAME}.bin"
 MERGED_BIN = "$BUILD_DIR/${PROGNAME}_0x00.bin"
 BOARD_CONFIG = env.BoardConfig()
+# ESP32-P4 uses esptool 5; keep esptool 4 syntax for the legacy ESP32/S3 platform.
+ESPTOOL_V5 = BOARD_CONFIG.get("build.mcu", "esp32") == "esp32p4"
 
 
 def merge_bin(source, target, env):
@@ -18,8 +20,8 @@ def merge_bin(source, target, env):
                 "$OBJCOPY",
                 "--chip",
                 BOARD_CONFIG.get("build.mcu", "esp32"),
-                "merge_bin",
-                "--flash_size",
+                "merge-bin" if ESPTOOL_V5 else "merge_bin",
+                "--flash-size" if ESPTOOL_V5 else "--flash_size",
                 BOARD_CONFIG.get("upload.flash_size", "4MB"),
                 "-o",
                 MERGED_BIN,

@@ -26,17 +26,16 @@ int SensorManager::begin()
 
 int FAST_CODE_ATTR SensorManager::read()
 {
-  _gyro.read();
+  const bool gyroRead = _gyro.read() != 0;
 
-  if(_model.state.loopTimer.syncTo(_model.state.gyro.timer))
+  if(_model.state.loopTimer.syncTo(_model.state.gyro.timer) && gyroRead)
   {
     _model.state.appQueue.send(Event(EVENT_GYRO_READ));
   }
 
   if(_model.state.accel.timer.syncTo(_model.state.gyro.timer))
   {
-    _accel.update();
-    _model.state.appQueue.send(Event(EVENT_ACCEL_READ));
+    if(_accel.update()) _model.state.appQueue.send(Event(EVENT_ACCEL_READ));
     _model.state.mode.button = _button.update();
     return 1;
   }
@@ -79,7 +78,7 @@ int FAST_CODE_ATTR SensorManager::fusion()
 // main task
 int FAST_CODE_ATTR SensorManager::update()
 {
-  _gyro.read();
+  if(!_gyro.read()) return 0;
   return preLoop();
 }
 
@@ -93,9 +92,9 @@ int SensorManager::updateDelayed()
   int status = 0;
   if(_model.state.accel.timer.syncTo(_model.state.gyro.timer))
   {
-    _accel.update();
+    const int accelRead = _accel.update();
     _model.state.mode.button = _button.update();
-    status = 1;
+    status = accelRead;
   }
 
   // delay imu update to next cycle

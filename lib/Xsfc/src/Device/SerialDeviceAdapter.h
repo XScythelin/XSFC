@@ -67,7 +67,7 @@ inline void SerialDeviceAdapter<WiFiClient>::updateBaudRate(int baud) {}
 
 #endif
 
-#if defined(ESP32C3) || defined(ESP32S3)
+#if defined(ESP32C3) || defined(ESP32S3) || defined(ESP32P4)
 template<>
 inline void SerialDeviceAdapter<HWCDC>::updateBaudRate(int baud) {}
 #endif

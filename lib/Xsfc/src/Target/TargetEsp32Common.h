@@ -18,9 +18,13 @@
 #define SERIAL_UART_NB_STOP_BIT_15   0B00100000
 #define SERIAL_UART_NB_STOP_BIT_2    0B00110000
 
-#define XSFC_WIFI
-#define XSFC_ESPNOW
-#define XSFC_LED_WS2812
+#if !defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(ESP32P4)
+  #define XSFC_WIFI
+  #define XSFC_ESPNOW
+#endif
+#if !defined(ESP32P4)
+  #define XSFC_LED_WS2812
+#endif
 
 namespace Xsfc {
 
@@ -65,7 +69,11 @@ inline int targetSPIInit(T& dev, int8_t sck, int8_t mosi, int8_t miso, int8_t ss
 template<typename T>
 inline int targetI2CInit(T& dev, int8_t sda, int8_t scl, uint32_t speed)
 {
+  #if defined(ESP32P4)
+  if(!dev.begin(sda, scl, speed)) return 0;
+  #else
   dev.begin(sda, scl, speed);
+  #endif
   dev.setTimeout(50);
   return 1;
 }

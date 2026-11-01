@@ -28,7 +28,7 @@
 
 namespace {
 #if defined(XSFC_SPI_0)
-#if defined(ESP32C3) || defined(ESP32S3) || defined(ESP32S2)
+#if defined(ESP32C3) || defined(ESP32S3) || defined(ESP32S2) || defined(ESP32P4)
 static SPIClass SPI1(HSPI);
 #elif defined(ESP32)
 static SPIClass SPI1(VSPI);
@@ -150,8 +150,12 @@ void Hardware::initBus()
       .logln(spiResult);
 #endif
 #if defined(XSFC_I2C_0)
+  // Use a conservative common ceiling during detection AND normal operation.
+  // Do not modify the persisted user setting.
+  const uint32_t requestedSpeed = _model.config.i2cSpeed * 1000ul;
+  const uint32_t actualSpeed = requestedSpeed > 400000ul ? 400000ul : requestedSpeed;
   int i2cResult =
-      i2cBus.begin(_model.config.pin[PIN_I2C_0_SDA], _model.config.pin[PIN_I2C_0_SCL], _model.config.i2cSpeed * 1000ul);
+      i2cBus.begin(_model.config.pin[PIN_I2C_0_SDA], _model.config.pin[PIN_I2C_0_SCL], actualSpeed);
   i2cBus.onError = std::bind(&Hardware::onI2CError, this);
   _model.logger.info()
       .log(F("I2C"))
@@ -159,12 +163,18 @@ void Hardware::initBus()
       .log(_model.config.pin[PIN_I2C_0_SCL])
       .log(_model.config.i2cSpeed)
       .logln(i2cResult);
+  _model.logger.info().log(F("I2C requested Hz")).log(requestedSpeed)
+      .log(F("actual Hz")).log(actualSpeed).log(F("limit applied")).logln(requestedSpeed != actualSpeed);
+  if(!i2cResult) _model.logger.info().logln(F("I2C startup failed: invalid pins, held bus or driver init failure"));
 #endif
 }
 
 void Hardware::detectGyro()
 {
   if (_model.config.gyro.dev == GYRO_NONE) return;
+  const auto wanted = [this](GyroDeviceType type) {
+    return _model.config.gyro.dev == GYRO_AUTO || _model.config.gyro.dev == type;
+  };
 
   const bool allowSpiBus = _model.config.gyro.bus == BUS_AUTO || _model.config.gyro.bus == BUS_SPI;
   const bool allowI2c = _model.config.gyro.bus == BUS_AUTO || _model.config.gyro.bus == BUS_I2C;
@@ -187,33 +197,44 @@ void Hardware::detectGyro()
       }
     };
 
-    if (!detectedGyro && detectDevice(mpu9250, spiBus, cs0)) detectedGyro = &mpu9250;
+    if ((_model.config.gyro.dev == GYRO_AUTO || _model.config.gyro.dev == GYRO_ICM20948) &&
+        detectDevice(icm20948, spiBus, cs0)) detectedGyro = &icm20948;
+    if (_model.config.gyro.dev != GYRO_ICM20948)
+    {
+    if (!detectedGyro && wanted(GYRO_MPU9250) && detectDevice(mpu9250, spiBus, cs0)) detectedGyro = &mpu9250;
     releaseCs0();
-    if (!detectedGyro && detectDevice(mpu6500, spiBus, cs0)) detectedGyro = &mpu6500;
+    if (!detectedGyro && wanted(GYRO_MPU6500) && detectDevice(mpu6500, spiBus, cs0)) detectedGyro = &mpu6500;
     releaseCs0();
-    if (!detectedGyro && detectDevice(icm20602, spiBus, cs0)) detectedGyro = &icm20602;
+    if (!detectedGyro && wanted(GYRO_ICM20602) && detectDevice(icm20602, spiBus, cs0)) detectedGyro = &icm20602;
     releaseCs0();
-    if (!detectedGyro && detectDevice(icm42688, spiBus, cs0)) detectedGyro = &icm42688;
+    if (!detectedGyro && wanted(GYRO_ICM42688) && detectDevice(icm42688, spiBus, cs0)) detectedGyro = &icm42688;
     releaseCs0();
-    if (!detectedGyro && detectDevice(bmi160, spiBus, cs0)) detectedGyro = &bmi160;
+    if (!detectedGyro && wanted(GYRO_BMI160) && detectDevice(bmi160, spiBus, cs0)) detectedGyro = &bmi160;
     releaseCs0();
-    if (!detectedGyro && detectDevice(lsm6dso, spiBus, cs0)) detectedGyro = &lsm6dso;
+    if (!detectedGyro && wanted(GYRO_LSM6DSO) && detectDevice(lsm6dso, spiBus, cs0)) detectedGyro = &lsm6dso;
     releaseCs0();
 
-    if (detectedGyro && !spiCs0ConflictsWithGpioOutput) gyroSlaveBus.begin(&spiBus, detectedGyro->getAddress());
+    }
+    if (detectedGyro && detectedGyro->getType() != GYRO_ICM20948 && detectedGyro->getType() != GYRO_ICM42688 && !spiCs0ConflictsWithGpioOutput) gyroSlaveBus.begin(&spiBus, detectedGyro->getAddress());
   }
 #endif
 #if defined(XSFC_I2C_0)
   if (allowI2c && !detectedGyro && _model.config.pin[PIN_I2C_0_SDA] != -1 && _model.config.pin[PIN_I2C_0_SCL] != -1)
   {
-    if (!detectedGyro && detectDevice(mpu9250, i2cBus)) detectedGyro = &mpu9250;
-    if (!detectedGyro && detectDevice(mpu6500, i2cBus)) detectedGyro = &mpu6500;
-    if (!detectedGyro && detectDevice(icm20602, i2cBus)) detectedGyro = &icm20602;
-    if (!detectedGyro && detectDevice(icm20948, i2cBus)) detectedGyro = &icm20948;
-    if (!detectedGyro && detectDevice(bmi160, i2cBus)) detectedGyro = &bmi160;
-    if (!detectedGyro && detectDevice(mpu6050, i2cBus)) detectedGyro = &mpu6050;
-    if (!detectedGyro && detectDevice(lsm6dso, i2cBus)) detectedGyro = &lsm6dso;
-    if (detectedGyro) gyroSlaveBus.begin(&i2cBus, detectedGyro->getAddress());
+    if ((_model.config.gyro.dev == GYRO_AUTO || _model.config.gyro.dev == GYRO_ICM20948) &&
+        detectDevice(icm20948, i2cBus)) detectedGyro = &icm20948;
+    if (_model.config.gyro.dev != GYRO_ICM20948)
+    {
+    if (!detectedGyro && (_model.config.gyro.dev == GYRO_AUTO || _model.config.gyro.dev == GYRO_ICM42688) &&
+        detectDevice(icm42688, i2cBus)) detectedGyro = &icm42688;
+    if (!detectedGyro && wanted(GYRO_MPU9250) && detectDevice(mpu9250, i2cBus)) detectedGyro = &mpu9250;
+    if (!detectedGyro && wanted(GYRO_MPU6500) && detectDevice(mpu6500, i2cBus)) detectedGyro = &mpu6500;
+    if (!detectedGyro && wanted(GYRO_ICM20602) && detectDevice(icm20602, i2cBus)) detectedGyro = &icm20602;
+    if (!detectedGyro && wanted(GYRO_BMI160) && detectDevice(bmi160, i2cBus)) detectedGyro = &bmi160;
+    if (!detectedGyro && wanted(GYRO_MPU6050) && detectDevice(mpu6050, i2cBus)) detectedGyro = &mpu6050;
+    if (!detectedGyro && wanted(GYRO_LSM6DSO) && detectDevice(lsm6dso, i2cBus)) detectedGyro = &lsm6dso;
+    }
+    if (detectedGyro && detectedGyro->getType() != GYRO_ICM20948 && detectedGyro->getType() != GYRO_ICM42688) gyroSlaveBus.begin(&i2cBus, detectedGyro->getAddress());
   }
 #endif
 
@@ -225,9 +246,25 @@ void Hardware::detectGyro()
   }
 #endif
 
-  if (!detectedGyro) return;
+  if (!detectedGyro)
+  {
+    if(_model.config.gyro.dev == GYRO_ICM20948)
+      _model.logger.info().log(F("ICM20948 failed stage (0=identity)" )).logln(icm20948.failureStage());
+    return;
+  }
 
-  detectedGyro->setDLPFMode(_model.config.gyro.dlpf);
+  detectedGyro->setDLPFMode(detectedGyro->resolveDLPFMode(_model.config.gyro.dlpf));
+  if(detectedGyro->getType() == GYRO_ICM20948)
+  {
+    _model.logger.info().log(F("ICM20948 bus/address/rate/ready"))
+      .log(detectedGyro->getBus()->getType()).log(detectedGyro->getAddress())
+      .log(detectedGyro->getRate()).logln(icm20948.ready());
+  }
+  if(detectedGyro->getType() == GYRO_ICM20948 && !icm20948.ready())
+  {
+    _model.logger.info().logln(F("ICM20948 configuration verification failed"));
+    return;
+  }
   _model.state.gyro.dev = detectedGyro;
   _model.state.gyro.present = (bool)detectedGyro;
   _model.state.accel.present = _model.state.gyro.present && _model.config.accel.dev != GYRO_NONE;

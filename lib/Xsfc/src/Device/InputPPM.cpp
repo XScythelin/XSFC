@@ -82,7 +82,7 @@ void IRAM_ATTR InputPPM::handle()
   {
     _new_data = true; // increase responsivnes for sticks channels
   }
-  _channel++;
+  _channel = _channel + 1;
 }
 
 void IRAM_ATTR InputPPM::handle_isr(void* args)

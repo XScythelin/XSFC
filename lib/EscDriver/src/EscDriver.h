@@ -2,7 +2,7 @@
 
 #include "EscDriverBase.hpp"
 
-#if defined(ESP32S3)
+#if defined(ESP32S3) || defined(ESP32P4)
 
   #define ESC_CHANNEL_COUNT 4
   #include "EscDriverEsp32.h"

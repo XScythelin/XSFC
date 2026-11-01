@@ -22,9 +22,9 @@ uint16_t IRAM_ATTR EscDriverBase::dshotConvert(uint16_t pulse)
   return pulse > 1000 ? PWM_TO_DSHOT(pulse) : 0;
 }
 
-uint16_t IRAM_ATTR EscDriverBase::dshotEncode(uint16_t value, bool inverted)
+uint16_t IRAM_ATTR EscDriverBase::dshotEncode(uint16_t value, bool inverted, bool requestTelemetry)
 {
-  value <<= 1;
+  value = (value << 1) | (requestTelemetry ? 1 : 0);
 
   // compute checksum
   int csum = 0;

@@ -1,194 +1,151 @@
-#ifndef _XSFC_DEVICE_GYRO_ICM20948_H_
-#define _XSFC_DEVICE_GYRO_ICM20948_H_
+#pragma once
 
-#include "BusDevice.hpp"
-#include "GyroMPU6050.h"
-#include "helper_3dmath.h"
+#include "GyroDevice.h"
 #include "Debug_Xsfc.h"
 
-namespace Xsfc {
+namespace Xsfc::Device {
 
-namespace Device {
-
-// ====================== РЕГИСТРЫ ======================
-#define ICM20948_RA_REG_BANK_SEL      0x7F
-
-// Bank 0
-#define ICM20948_RA_WHO_AM_I          0x00
-#define ICM20948_WHO_AM_I             0xEA
-
-#define ICM20948_RA_PWR_MGMT_1        0x06
-#define ICM20948_RA_PWR_MGMT_2        0x07
-
-// Bank 2
-#define ICM20948_RA_GYRO_CONFIG_1     0x01  // [5:3] GYRO_DLPFCFG, [2:1] GYRO_FS_SEL, [0] GYRO_FCHOICE
-#define ICM20948_RA_GYRO_SMPLRT_DIV   0x00
-#define ICM20948_RA_ACCEL_CONFIG      0x14  // [5:3] ACCEL_DLPFCFG, [2:1] ACCEL_FS_SEL, [0] ACCEL_FCHOICE
-
-// Данные (Bank 0)
-#define ICM20948_RA_ACCEL_XOUT_H      0x2D
-#define ICM20948_RA_GYRO_XOUT_H       0x33
-
-/*
- * GYRO_CONFIG_1 (Bank 2, reg 0x01):
- *   bits [5:3] = GYRO_DLPFCFG — выбор частоты среза DLPF (0..7)
- *   bits [2:1] = GYRO_FS_SEL:
- *     00 = +-250  dps
- *     01 = +-500  dps
- *     10 = +-1000 dps
- *     11 = +-2000 dps
- *   bit  [0]   = GYRO_FCHOICE:
- *     0 = DLPF отключён (9kHz шум)
- *     1 = DLPF включён  <-- нам нужно это
- *
- * Значение 0x07 = 0b00000111 -> FS=11 (+-2000 dps), FCHOICE=1 (DLPF ON)
- *
- * ACCEL_CONFIG (Bank 2, reg 0x14):
- *   bits [5:3] = ACCEL_DLPFCFG — выбор частоты среза DLPF (0..7)
- *   bits [2:1] = ACCEL_FS_SEL:
- *     00 = +-2g
- *     01 = +-4g
- *     10 = +-8g
- *     11 = +-16g
- *   bit  [0]   = ACCEL_FCHOICE:
- *     0 = DLPF отключён
- *     1 = DLPF включён  <-- нам нужно это
- *
- * Значение 0x07 = 0b00000111 -> FS=11 (+-16g), FCHOICE=1 (DLPF ON)
- *
- * ВНИМАНИЕ: В ICM20948 FCHOICE=1 ВКЛЮЧАЕТ DLPF — логика обратна MPU6050!
- */
-
-#define ICM20948_GYRO_CONFIG_2000DPS_DLPF_ON  0x07  // FS=11 (+-2000dps), FCHOICE=1 (DLPF ON)
-#define ICM20948_ACCEL_CONFIG_16G_DLPF_ON     0x07  // FS=11 (+-16g),     FCHOICE=1 (DLPF ON)
-
-class GyroICM20948 : public GyroMPU6050
+// ICM-20948 banked register map. SPI register setup stays at 1 MHz;
+// sample reads use 7 MHz, the device's specified maximum SPI clock.
+class GyroICM20948 : public GyroDevice
 {
 public:
-    GyroDeviceType getType() const override { return GYRO_ICM20948; }
+  GyroDeviceType getType() const override { return GYRO_ICM20948; }
+  int begin(BusDevice* bus) override
+  {
+    if(bus->isSPI()) return 0; // SPI requires an explicit CS GPIO.
+    return begin(bus, 0x68) || begin(bus, 0x69);
+  }
 
-    int begin(BusDevice *bus) override
+  int begin(BusDevice* bus, uint8_t address) override
+  {
+    setBus(bus, address);
+    _ready = false;
+    _rate = 1125;
+    if(!testConnection()) return 0;
+    for(unsigned attempt = 1; attempt <= 3; attempt++)
     {
-        if (tryInit(bus, 0x68)) return 1;
-        if (tryInit(bus, 0x69)) return 1;
-        D("icm20948: НЕ НАЙДЕН ни на 0x68, ни на 0x69");
-        return 0;
+      D("ICM20948 init", address, "attempt", attempt);
+      if(initialize()) { _ready = true; return 1; }
+      D("ICM20948 failed stage", _stage);
+      bank(0); // Best effort only; next attempt explicitly selects bank 0.
+      delay(25);
     }
+    return 0;
+  }
 
-    int begin(BusDevice *bus, uint8_t addr) override
-    {
-        return tryInit(bus, addr);
-    }
+  bool testConnection() override
+  {
+    uint8_t id = 0;
+    return bank(0) && _bus->readByte(_addr, 0x00, &id) == 1 && id == 0xEA;
+  }
 
-    bool testConnection() override
-    {
-        setBank(0);
-        uint8_t whoami = 0;
-        _bus->readByte(_addr, ICM20948_RA_WHO_AM_I, &whoami);
-        D("icm20948 whoami @", _addr, "=", whoami, "(ожидаем 0xEA)");
-        return whoami == ICM20948_WHO_AM_I;
-    }
+  void setDLPFMode(uint8_t mode) override
+  {
+    if(!_ready) return;
+    // Preserve XSFC's MPU-style menu semantics: 256/EX are high-rate modes.
+    // Other entries select the nearest ICM bandwidth, not the MPU register code.
+    if(mode > 7) mode = 0;
+    const bool bypass = mode == 0 || mode == 7;
+    static constexpr uint8_t gyroLpf[] = {0, 0, 2, 3, 4, 5, 6, 0};
+    static constexpr uint8_t accelLpf[] = {0, 1, 2, 3, 4, 5, 6, 0};
+    const uint8_t gyroCfg = 0x06 | (bypass ? 0 : 1) | (gyroLpf[mode] << 3);
+    // Accel is independent: retain its anti-alias filtering at 1125 Hz ODR.
+    const uint8_t accelCfg = 0x07 | (accelLpf[mode] << 3);
+    const bool ok = bank(2) && writeChecked(0x01, gyroCfg) && writeChecked(0x14, accelCfg) &&
+      writeChecked(0x00, 0);
+    const bool restored = bank(0);
+    if(!ok || !restored) _ready = false;
+    else { _bypass = bypass; _rate = bypass ? 9000 : 1125; }
+  }
 
-    void setDLPFMode(uint8_t mode) override
-    {
-        // ICM20948: биты [5:3] = GYRO_DLPFCFG / ACCEL_DLPFCFG
-        // FCHOICE бит [0] = 1 включает DLPF (логика обратна MPU6050!)
-        uint8_t dlpf = (mode > 7) ? 7 : mode;
-        setBank(2);
+  // Divider applies only with DLPF enabled. Bypass ODR is fixed at 9 kHz.
+  int getRate() const override { return _rate; }
+  void setRate(int rate) override
+  {
+    if(!_ready || rate <= 0) return;
+    if(_bypass) { _rate = 9000; return; }
+    int divisor = (1125 + rate / 2) / rate;
+    if(divisor < 1) divisor = 1;
+    if(divisor > 256) divisor = 256;
+    const bool ok = bank(2) && writeChecked(0x00, divisor - 1);
+    const bool restored = bank(0);
+    if(ok && restored) _rate = 1125 / divisor;
+    else _ready = false;
+  }
 
-        uint8_t gyroCfg = 0;
-        _bus->readByte(_addr, ICM20948_RA_GYRO_CONFIG_1, &gyroCfg);
-        gyroCfg = (gyroCfg & 0xC7) | (dlpf << 3);  // биты [5:3] = DLPFCFG, сохраняем [7:6] и [2:0]
-        gyroCfg |= 0x01;                             // FCHOICE=1, DLPF ON
-        _bus->writeByte(_addr, ICM20948_RA_GYRO_CONFIG_1, gyroCfg);
-
-        uint8_t accelCfg = 0;
-        _bus->readByte(_addr, ICM20948_RA_ACCEL_CONFIG, &accelCfg);
-        accelCfg = (accelCfg & 0xC7) | (dlpf << 3); // биты [5:3] = DLPFCFG, сохраняем [7:6] и [2:0]
-        accelCfg |= 0x01;                             // FCHOICE=1, DLPF ON
-        _bus->writeByte(_addr, ICM20948_RA_ACCEL_CONFIG, accelCfg);
-
-        setBank(0);
-    }
-
-    // ====================== ЧТЕНИЕ ДАННЫХ ======================
-    // ВАЖНО: без setBank() — иначе relocation error на ESP32-S3
-    int FAST_CODE_ATTR readGyro(VectorInt16& v) override
-    {
-        uint8_t buffer[6];
-        if(!_bus->readFast(_addr, ICM20948_RA_GYRO_XOUT_H, 6, buffer))
-            return 0;
-        v.x = (((int16_t)buffer[0]) << 8) | buffer[1];
-        v.y = (((int16_t)buffer[2]) << 8) | buffer[3];
-        v.z = (((int16_t)buffer[4]) << 8) | buffer[5];
-        return 1;
-    }
-
-    int readAccel(VectorInt16& v) override
-    {
-        uint8_t buffer[6];
-        _bus->readFast(_addr, ICM20948_RA_ACCEL_XOUT_H, 6, buffer);
-
-        v.x = (((int16_t)buffer[0]) << 8) | buffer[1];
-        v.y = (((int16_t)buffer[2]) << 8) | buffer[3];
-        v.z = (((int16_t)buffer[4]) << 8) | buffer[5];
-        return 1;
-    }
+  int readGyro(VectorInt16& v) override { return _ready && readVector(0x33, v); }
+  int readAccel(VectorInt16& v) override { return _ready && readVector(0x2D, v); }
+  bool ready() const override { return _ready; }
+  uint32_t readErrors() const override { return _readErrors; }
+  uint32_t consecutiveErrors() const override { return _consecutiveErrors; }
+  uint32_t lastGoodReadUs() const override { return _lastGoodReadUs; }
+  unsigned failureStage() const { return _stage; }
 
 private:
-    bool tryInit(BusDevice *bus, uint8_t addr)
+  bool _ready = false;
+  bool _bypass = false;
+  int _rate = 1125;
+  unsigned _stage = 0;
+  uint32_t _readErrors = 0, _consecutiveErrors = 0, _lastGoodReadUs = 0;
+
+  bool bank(uint8_t value)
+  {
+    return _bus->writeByte(_addr, 0x7F, value << 4);
+  }
+  bool writeChecked(uint8_t reg, uint8_t value, uint8_t mask = 0xFF)
+  {
+    uint8_t actual = 0;
+    return _bus->writeByte(_addr, reg, value) &&
+      _bus->readByte(_addr, reg, &actual) == 1 && (actual & mask) == (value & mask);
+  }
+  bool readVector(uint8_t reg, VectorInt16& v)
+  {
+    uint8_t bytes[6];
+    // Shared readFast is 16 MHz, beyond ICM20948's 7 MHz limit.
+    if(_bus->readAtSpeed(_addr, reg, sizeof(bytes), bytes, 7000000) != sizeof(bytes))
     {
-        _bus = bus;
-        _addr = addr;
-        D("icm20948: пробую адрес 0x", _addr);
-
-        if (!testConnection()) return false;
-
-        D("icm20948: сенсор найден по адресу 0x", _addr);
-        return initSensor();
+      ++_readErrors;
+      ++_consecutiveErrors;
+      return false;
     }
-
-    bool setBank(uint8_t bank)
+    v.x = static_cast<int16_t>((uint16_t(bytes[0]) << 8) | bytes[1]);
+    v.y = static_cast<int16_t>((uint16_t(bytes[2]) << 8) | bytes[3]);
+    v.z = static_cast<int16_t>((uint16_t(bytes[4]) << 8) | bytes[5]);
+    _consecutiveErrors = 0;
+    _lastGoodReadUs = micros();
+    return true;
+  }
+  bool initialize()
+  {
+    _stage = 1;
+    if(!bank(0) || !_bus->writeByte(_addr, 0x06, 0x80)) return false;
+    delay(100);
+    const uint32_t start = millis();
+    bool resetDone = false;
+    do
     {
-        bool ok = _bus->writeByte(_addr, ICM20948_RA_REG_BANK_SEL, bank << 4) == 1;
-        delay(1);
-        return ok;
-
-    }
-
-    int initSensor()
-    {
-        D("icm20948: начинаем инициализацию...");
-        setBank(0);
-
-        // Полный сброс устройства
-        _bus->writeByte(_addr, ICM20948_RA_PWR_MGMT_1, 0x80);
-        delay(100);
-
-        // Выход из sleep, PLL от гироскопа как источник тактирования
-        _bus->writeByte(_addr, ICM20948_RA_PWR_MGMT_1, 0x01);
-        delay(25);
-
-        // Включить гироскоп и акселерометр (все оси)
-        _bus->writeByte(_addr, ICM20948_RA_PWR_MGMT_2, 0x00);
-
-        setBank(2);
-
-        // Гироскоп: +-2000 dps, DLPF включён (FCHOICE=1)
-        // 0x07 = 0b00000111: FS_SEL=11 (+-2000dps), FCHOICE=1 (DLPF ON)
-        _bus->writeByte(_addr, ICM20948_RA_GYRO_CONFIG_1, ICM20948_GYRO_CONFIG_2000DPS_DLPF_ON);
-
-        // Акселерометр: +-16g, DLPF включён (FCHOICE=1)
-        // 0x07 = 0b00000111: FS_SEL=11 (+-16g), FCHOICE=1 (DLPF ON)
-        _bus->writeByte(_addr, ICM20948_RA_ACCEL_CONFIG, ICM20948_ACCEL_CONFIG_16G_DLPF_ON);
-
-        setBank(0);
-        D("icm20948: инициализация завершена успешно");
-        return 1;
-    }
+      uint8_t power = 0;
+      if(bank(0) && _bus->readByte(_addr, 0x06, &power) == 1 && !(power & 0x80))
+      { resetDone = true; break; }
+      delay(5);
+    } while(uint32_t(millis() - start) < 200);
+    _stage = 2;
+    if(!resetDone || !testConnection()) return false;
+    // Disable I2C interface only for SPI; FIFO/DMP/internal master remain off.
+    if(!writeChecked(0x03, _bus->isSPI() ? 0x10 : 0x00, 0xF0) ||
+       !writeChecked(0x05, 0x00, 0x70) || !writeChecked(0x06, 0x01, 0x7F) ||
+       !writeChecked(0x07, 0x00, 0x3F)) return false;
+    delay(35);
+    _stage = 3;
+    if(!bank(2) || !writeChecked(0x00, 0) || !writeChecked(0x01, 0x07) ||
+       !writeChecked(0x10, 0, 0x0F) || !writeChecked(0x11, 0) ||
+       !writeChecked(0x14, 0x07)) return false;
+    _stage = 4;
+    if(!bank(0)) return false;
+    delay(20);
+    VectorInt16 gyro, accel;
+    return readVector(0x33, gyro) && readVector(0x2D, accel);
+  }
 };
-
-} // namespace Device
-} // namespace Xsfc
-
-#endif
+}

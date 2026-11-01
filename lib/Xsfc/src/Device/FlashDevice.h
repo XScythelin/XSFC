@@ -47,7 +47,8 @@ public:
       do {
         const esp_partition_t* p = esp_partition_get(pi);
         s.printf("|  %02x  | %02x  | 0x%06X | 0x%06X | %-16s |\r\n", 
-          p->type, p->subtype, p->address, p->size, p->label);
+          static_cast<unsigned int>(p->type), static_cast<unsigned int>(p->subtype),
+          static_cast<unsigned int>(p->address), static_cast<unsigned int>(p->size), p->label);
       } while ((pi = esp_partition_next(pi)));
     }
   }
@@ -64,7 +65,7 @@ public:
     for(size_t i = 0; i < 8; i++)
     {
       const auto& it = journal[i];
-      s.printf("%08x => %08x\r\n", it.logBegin, it.logEnd);
+      s.printf("%08x => %08x\r\n", static_cast<unsigned int>(it.logBegin), static_cast<unsigned int>(it.logEnd));
     }
   }
 

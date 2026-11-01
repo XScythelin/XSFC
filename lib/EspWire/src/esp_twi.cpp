@@ -20,6 +20,10 @@
 */
 #include <Arduino.h>
 #include "esp_twi.h"
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  #include <esp_cpu.h>
+  #include <hal/gpio_ll.h>
+#endif
 #if defined(ESP32C3)
   #include <soc/cpu.h>
 #endif
@@ -35,6 +39,13 @@ static uint32_t esp_twi_clockStretchLimit;
   #define SCL_LOW()   (GPES = (1 << esp_twi_scl))
   #define SCL_HIGH()  (GPEC = (1 << esp_twi_scl))
   #define SCL_READ()  ((GPI & (1 << esp_twi_scl)) != 0)
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+  #define SDA_LOW()   (gpio_ll_output_enable(&GPIO, esp_twi_sda))
+  #define SDA_HIGH()  (gpio_ll_output_disable(&GPIO, esp_twi_sda))
+  #define SDA_READ()  (gpio_ll_get_level(&GPIO, esp_twi_sda))
+  #define SCL_LOW()   (gpio_ll_output_enable(&GPIO, esp_twi_scl))
+  #define SCL_HIGH()  (gpio_ll_output_disable(&GPIO, esp_twi_scl))
+  #define SCL_READ()  (gpio_ll_get_level(&GPIO, esp_twi_scl))
 #elif defined(ESP32C3)
   //#define SDA_LOW()   (GPIO.enable_w1ts.enable_w1ts = ((uint32_t) 1 << esp_twi_sda)) //Enable SDA (becomes output and since GPO is 0 for the pin, it will pull the line low)
   static inline void SDA_LOW() { GPIO.enable_w1ts.enable_w1ts = (uint32_t) 1 << esp_twi_sda; GPIO.out_w1tc.out_w1tc = (uint32_t) 1 << esp_twi_sda; }
@@ -180,7 +191,9 @@ void esp_twi_stop(void){
 
 static inline IRAM_ATTR unsigned int _getCycleCount()
 {
-#if defined(ESP32C3)
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  return esp_cpu_get_cycle_count();
+#elif defined(ESP32C3)
   return esp_cpu_get_ccount();
 #elif defined(ESP32) || defined(ESP8266)
   unsigned int ccount = 0;

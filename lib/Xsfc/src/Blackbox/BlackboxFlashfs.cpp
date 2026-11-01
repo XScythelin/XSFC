@@ -3,6 +3,10 @@
 
 #ifdef USE_FLASHFS
 
+#if defined(ESP32P4)
+#include <spi_flash_mmap.h>
+#endif
+
 #include "Device/FlashDevice.h"
 #include "Utils/RingBuf.h"
 #include "Utils/Math.hpp"

@@ -1,6 +1,8 @@
 #pragma once
 
-#if defined(ESP32S3)
+#if defined(ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32P4)
+  #include "TargetESP32p4.h"
+#elif defined(ESP32S3)
   #include "TargetESP32s3.h"
 #elif defined(ESP32)
   #include "TargetESP32.h"
@@ -56,6 +58,12 @@ enum SerialPort {
 #endif
 #ifdef XSFC_SERIAL_2
   SERIAL_UART_2,
+#endif
+#ifdef XSFC_SERIAL_3
+  SERIAL_UART_3,
+#endif
+#ifdef XSFC_SERIAL_4
+  SERIAL_UART_4,
 #endif
 #ifdef XSFC_SERIAL_SOFT_0
   SERIAL_SOFT_0,

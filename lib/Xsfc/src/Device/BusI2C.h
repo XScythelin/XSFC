@@ -19,6 +19,9 @@ class BusI2C: public BusDevice
 
   private:
     WireClass& _dev;
+    bool _ready = false;
+    bool _addressSeen[128] = {};
+    bool ensureAddress(uint8_t address);
 };
 
 }

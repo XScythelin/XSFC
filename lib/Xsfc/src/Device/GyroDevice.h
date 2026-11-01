@@ -37,10 +37,21 @@ class GyroDevice: public BusAwareDevice
     virtual int readAccel(VectorInt16& v) = 0;
 
     virtual void setDLPFMode(uint8_t mode) = 0;
+    // CLI AUTO keeps legacy behavior for other IMUs, enables DLPF on ICM20948.
+    uint8_t resolveDLPFMode(uint8_t mode) const
+    {
+      return mode == 8 ? (getType() == GYRO_ICM20948 ? 1 : 0) : mode;
+    }
     virtual int getRate() const = 0;
     virtual void setRate(int rate) = 0;
 
     virtual bool testConnection() = 0;
+
+    // Optional diagnostics. Drivers without checked transfers return zero.
+    virtual bool ready() const { return true; }
+    virtual uint32_t readErrors() const { return 0; }
+    virtual uint32_t consecutiveErrors() const { return 0; }
+    virtual uint32_t lastGoodReadUs() const { return 0; }
 
     static const char ** getNames();
     static const char * getName(DeviceType type);

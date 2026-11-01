@@ -8,6 +8,16 @@
 #include "hal/gpio_ll.h"
 #include "esp_rom_gpio.h"
 
+#if defined(ESP32P4)
+extern "C" rmt_mem_t RMTMEM;
+// IDF 5.x consolidated the per-event LL helpers into event-mask operations.
+// Keep the IDF 4.x path used by ESP32/S3 intact.
+#define rmt_ll_enable_tx_end_interrupt(dev, ch, en) rmt_ll_enable_interrupt(dev, RMT_LL_EVENT_TX_DONE(ch), en)
+#define rmt_ll_clear_tx_end_interrupt(dev, ch) rmt_ll_clear_interrupt_status(dev, RMT_LL_EVENT_TX_DONE(ch))
+#define rmt_ll_enable_rx_end_interrupt(dev, ch, en) rmt_ll_enable_interrupt(dev, RMT_LL_EVENT_RX_DONE(ch), en)
+#define rmt_ll_clear_rx_end_interrupt(dev, ch) rmt_ll_clear_interrupt_status(dev, RMT_LL_EVENT_RX_DONE(ch))
+#endif
+
 static constexpr size_t DURATION_CLOCK = 25; // [ns] doubled value to increase precision
 #define TO_INTERVAL_US(v) (1 * 1000 * 1000 / (v)) // [us]
 
@@ -24,9 +34,16 @@ static constexpr size_t DURATION_CLOCK = 25; // [ns] doubled value to increase p
 IRAM_ATTR static esp_err_t _rmt_fill_tx_items(rmt_channel_t channel, const rmt_item32_t* item, uint16_t item_num, uint16_t mem_offset)
 {
   //rmt_ll_enable_mem_access(&RMT, true);
+#if defined(ESP32P4)
+  volatile uint32_t* dest = &RMTMEM.chan[channel].data32[mem_offset].val;
+  for(uint16_t i = 0; i < item_num; i++) dest[i] = item[i].val;
+#else
   rmt_ll_write_memory(&RMTMEM, channel, item, item_num, mem_offset);
+#endif
   rmt_ll_tx_reset_pointer(&RMT, channel);
+#if !defined(ESP32P4)
   rmt_ll_rx_set_mem_owner(&RMT, channel, RMT_MEM_OWNER_TX);
+#endif
   return ESP_OK;
 }
 IRAM_ATTR static esp_err_t _rmt_tx_start(rmt_channel_t channel, bool tx_idx_rst)
@@ -35,7 +52,9 @@ IRAM_ATTR static esp_err_t _rmt_tx_start(rmt_channel_t channel, bool tx_idx_rst)
   {
     rmt_ll_tx_reset_pointer(&RMT, channel); // BC
   }
+#if !defined(ESP32P4)
   rmt_ll_rx_set_mem_owner(&RMT, channel, RMT_MEM_OWNER_TX); // moved to _rmt_fill_tx_items
+#endif
   rmt_ll_clear_tx_end_interrupt(&RMT, channel);
   rmt_ll_tx_start(&RMT, channel);
   return ESP_OK;
@@ -84,6 +103,13 @@ void EscDriverEsp32::end()
     if (_protocol == ESC_PROTOCOL_DISABLED) continue;
     // TODO: handle splitted case
     rmt_driver_uninstall((rmt_channel_t)i);
+#if defined(ESP32P4)
+    if(_digital && _dshot_tlm)
+    {
+      rmt_driver_uninstall((rmt_channel_t)RMT_ENCODE_RX_CHANNEL(i));
+    }
+    instances[i] = nullptr;
+#endif
   }
   _protocol = ESC_PROTOCOL_DISABLED;
 }
@@ -104,6 +130,14 @@ int EscDriverEsp32::attach(size_t channel, int pin, int pulse)
 {
   if (channel < 0 || channel >= ESC_CHANNEL_COUNT) return 0;
   initChannel(channel, (gpio_num_t)pin, pulse);
+  return 1;
+}
+
+int EscDriverEsp32::beep(size_t channel, uint8_t tone)
+{
+  if(!_digital || channel >= ESC_CHANNEL_COUNT || tone < 1 || tone > 5) return 0;
+  // Negative sentinel is internal only; normal write() replaces it next cycle.
+  _channel[channel].pulse = -static_cast<int>(tone);
   return 1;
 }
 
@@ -258,7 +292,11 @@ void IRAM_ATTR EscDriverEsp32::enableRx(rmt_channel_t channel)
   esp_rom_gpio_connect_in_signal(gpio_num, rmt_periph_signals.groups[0].channels[rx_ch].rx_sig, false);
 
   //rmt_rx_start((rmt_channel_t)i, true);
+#if defined(ESP32P4)
+  rmt_ll_rx_set_mem_owner(&RMT, channel, RMT_LL_MEM_OWNER_HW);
+#else
   rmt_ll_rx_set_mem_owner(&RMT, channel, RMT_MEM_OWNER_RX);
+#endif
   rmt_ll_rx_reset_pointer(&RMT, channel);
   rmt_ll_clear_rx_end_interrupt(&RMT, channel);
   rmt_ll_enable_rx_end_interrupt(&RMT, channel, true);
@@ -388,10 +426,13 @@ void IRAM_ATTR EscDriverEsp32::writeDshotCommand(uint32_t channel, int32_t pulse
     modeTx((rmt_channel_t)channel);
   }
 
+  const bool command = pulse >= -5 && pulse <= -1;
+  const int tone = command ? -pulse : 0;
+  if(command) _channel[channel].pulse = 1000; // One-shot, including async TX callbacks.
   pulse = constrain(pulse, 0, 2000);
   // scale to dshot commands (0 or 48-2047)
-  int value = dshotConvert(pulse);
-  uint16_t frame = dshotEncode(value, _dshot_tlm);
+  int value = command ? tone : dshotConvert(pulse);
+  uint16_t frame = dshotEncode(value, _dshot_tlm, command);
 
   Slot& slot = _channel[channel];
   for (size_t i = 0; i < DSHOT_BIT_COUNT; i++)

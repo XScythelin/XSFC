@@ -51,7 +51,7 @@ public:
     {
       const int32_t endOffset = (int32_t)(entry.end - end);
       const int32_t startOffset = endOffset - (int32_t)entry.duration;
-      const int32_t overlap = std::min(endOffset, 0) - std::max(startOffset, -(int32_t)interval);
+      const int32_t overlap = std::min<int32_t>(endOffset, 0) - std::max(startOffset, -(int32_t)interval);
       if (overlap > 0)
       {
         covered += overlap;

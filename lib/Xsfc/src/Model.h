@@ -296,6 +296,12 @@ class Model
 #ifdef XSFC_SERIAL_2
         case SERIAL_ID_UART_3: return SERIAL_UART_2;
 #endif
+#ifdef XSFC_SERIAL_3
+        case SERIAL_ID_UART_4: return SERIAL_UART_3;
+#endif
+#ifdef XSFC_SERIAL_4
+        case SERIAL_ID_UART_5: return SERIAL_UART_4;
+#endif
 #ifdef XSFC_SERIAL_USB
         case SERIAL_ID_USB_VCP: return SERIAL_USB;
 #endif

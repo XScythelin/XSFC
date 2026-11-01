@@ -1,4 +1,6 @@
 #include "platform.h"
+// Arduino supplies its own constrain macro; retain platform.h's version for C files.
+#undef constrain
 #include "Device/SerialDevice.h"
 #include "EscDriver.h"
 #include "Hal/Gpio.h"

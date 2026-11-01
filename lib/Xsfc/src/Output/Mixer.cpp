@@ -274,6 +274,20 @@ void FAST_CODE_ATTR Mixer::writeOutput(const MixerConfig& mixer, float * out)
     }
   }
 
+  const auto protocol = _model.config.output.protocol;
+  bool beaconSafe = !_model.isModeActive(MODE_ARMED) && stop &&
+    (protocol == ESC_PROTOCOL_DSHOT150 || protocol == ESC_PROTOCOL_DSHOT300 || protocol == ESC_PROTOCOL_DSHOT600);
+  for(size_t i = 0; i < OUTPUT_CHANNELS; ++i)
+  {
+    if(!_model.config.output.channel[i].servo && _model.state.output.us[i] > 1000) beaconSafe = false;
+  }
+  if(_motor && _beacon.update(millis(), _model.isModeActive(MODE_BUZZER), beaconSafe))
+  {
+    for(size_t i = 0; i < OUTPUT_CHANNELS; ++i)
+    {
+      if(!_model.config.output.channel[i].servo && _motor->pin(i) != -1) _motor->beep(i, 1);
+    }
+  }
   if(_motor) _motor->apply();
   if(_servo) _servo->apply();
 }

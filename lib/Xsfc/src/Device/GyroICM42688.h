@@ -26,24 +26,27 @@ class GyroICM42688 : public GyroDevice
 public:
   int begin(BusDevice* bus) override
   {
-    return begin(bus, 0);
+    if(bus->isSPI()) return 0; // SPI requires an explicit CS GPIO.
+    return begin(bus, 0x68) || begin(bus, 0x69);
   }
 
   int begin(BusDevice* bus, uint8_t addr) override
   {
     setBus(bus, addr);
+    _ready = false;
 
     if (!testConnection()) return 0;
 
-    _bus->writeByte(_addr, ICM42688_REG_DEVICE_CONFIG, ICM42688_SOFT_RESET);
+    if(!_bus->writeByte(_addr, ICM42688_REG_DEVICE_CONFIG, ICM42688_SOFT_RESET)) return 0;
     delay(2); // no check as min 1ms after soft reset is required before register access (see datasheet)
 
-    if (!_bus->writeByte(_addr, ICM42688_REG_PWR_MGMT0, ICM42688_PWR_GYRO_ACCEL_LN)) return 0;
-    delay(1);
-
+    // Configure ODR while sensors are off, then allow gyro startup to settle.
     if (!_bus->writeByte(_addr, ICM42688_REG_GYRO_CONFIG0, ICM42688_GYRO_2000DPS_8KHZ)) return 0;
     if (!_bus->writeByte(_addr, ICM42688_REG_ACCEL_CONFIG0, ICM42688_ACCEL_16G_8KHZ)) return 0;
+    if (!_bus->writeByte(_addr, ICM42688_REG_PWR_MGMT0, ICM42688_PWR_GYRO_ACCEL_LN)) return 0;
+    delay(45);
 
+    _ready = true;
     return 1;
   }
 
@@ -54,22 +57,12 @@ public:
 
   int FAST_CODE_ATTR readGyro(VectorInt16& v) override
   {
-    uint8_t buffer[6];
-    _bus->readFast(_addr, ICM42688_REG_GYRO_DATA_X1, 6, buffer);
-    v.x = (((int16_t)buffer[0]) << 8) | buffer[1];
-    v.y = (((int16_t)buffer[2]) << 8) | buffer[3];
-    v.z = (((int16_t)buffer[4]) << 8) | buffer[5];
-    return 1;
+    return readVector(ICM42688_REG_GYRO_DATA_X1, v);
   }
 
   int FAST_CODE_ATTR readAccel(VectorInt16& v) override
   {
-    uint8_t buffer[6];
-    _bus->readFast(_addr, ICM42688_REG_ACCEL_DATA_X1, 6, buffer);
-    v.x = (((int16_t)buffer[0]) << 8) | buffer[1];
-    v.y = (((int16_t)buffer[2]) << 8) | buffer[3];
-    v.z = (((int16_t)buffer[4]) << 8) | buffer[5];
-    return 1;
+    return readVector(ICM42688_REG_ACCEL_DATA_X1, v);
   }
 
   // ICM-42688-P AAF lives in Bank 1 registers; no-op matches GyroBMI160 pattern
@@ -85,9 +78,25 @@ public:
   bool testConnection() override
   {
     uint8_t whoami = 0;
-    _bus->readByte(_addr, ICM42688_REG_WHO_AM_I, &whoami);
     // D("icm42688:whoami", _addr, whoami);
-    return whoami == ICM42688_WHO_AM_I_VALUE;
+    return _bus->readByte(_addr, ICM42688_REG_WHO_AM_I, &whoami) == 1 &&
+      whoami == ICM42688_WHO_AM_I_VALUE;
+  }
+
+  bool ready() const override { return _ready; }
+
+private:
+  bool _ready = false;
+
+  int readVector(uint8_t reg, VectorInt16& v)
+  {
+    if(!_ready) return 0;
+    uint8_t buffer[6];
+    if(_bus->readFast(_addr, reg, sizeof(buffer), buffer) != sizeof(buffer)) return 0;
+    v.x = static_cast<int16_t>((uint16_t(buffer[0]) << 8) | buffer[1]);
+    v.y = static_cast<int16_t>((uint16_t(buffer[2]) << 8) | buffer[3]);
+    v.z = static_cast<int16_t>((uint16_t(buffer[4]) << 8) | buffer[5]);
+    return 1;
   }
 };
 

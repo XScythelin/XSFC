@@ -1,0 +1,28 @@
+"""Guard the P4 wiring defaults against motor/bus pin conflicts."""
+import pathlib
+import re
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+class P4PinsTests(unittest.TestCase):
+    def test_motor_defaults_do_not_overlap_bus_pins(self):
+        source = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
+        pins = {name: int(value) for name, value in re.findall(
+            r'^#define\s+(XSFC_\w+)\s+(-?\d+)\b', source, re.MULTILINE)}
+        motors = [pins[f'XSFC_OUTPUT_{i}'] for i in range(4)]
+        self.assertEqual(motors, [33, 49, 50, 52])
+        self.assertEqual(len(set(motors)), 4)
+        self.assertEqual(pins['XSFC_SPI_CS_BARO'], -1)
+        bus_names = ['XSFC_SPI_0_SCK', 'XSFC_SPI_0_MOSI', 'XSFC_SPI_0_MISO',
+                     'XSFC_SPI_CS_GYRO', 'XSFC_SPI_CS_BARO',
+                     'XSFC_I2C_0_SDA', 'XSFC_I2C_0_SCL']
+        bus_names += [f'XSFC_SERIAL_{i}_{direction}' for i in range(5)
+                      for direction in ('TX', 'RX')]
+        for name in bus_names:
+            self.assertNotIn(pins[name], motors, name)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -27,6 +27,7 @@ enum GyroDlpf {
   GYRO_DLPF_10  = 0x05,
   GYRO_DLPF_5   = 0x06,
   GYRO_DLPF_EX  = 0x07,
+  GYRO_DLPF_AUTO = 0x08,
 };
 
 enum AccelMode {
@@ -258,6 +259,14 @@ enum PinFunction {
 #ifdef XSFC_SERIAL_2
   PIN_SERIAL_2_TX,
   PIN_SERIAL_2_RX,
+#endif
+#ifdef XSFC_SERIAL_3
+  PIN_SERIAL_3_TX,
+  PIN_SERIAL_3_RX,
+#endif
+#ifdef XSFC_SERIAL_4
+  PIN_SERIAL_4_TX,
+  PIN_SERIAL_4_RX,
 #endif
 #ifdef XSFC_I2C_0
   PIN_I2C_0_SCL,
@@ -559,7 +568,7 @@ struct GyroConfig
 {
   int8_t bus = BUS_AUTO;
   int8_t dev = GYRO_AUTO;
-  int8_t dlpf = GYRO_DLPF_256;
+  int8_t dlpf = GYRO_DLPF_AUTO;
   int8_t align = ALIGN_DEFAULT;
   int16_t bias[3] = { 0, 0, 0 };
   FilterConfig filter{FILTER_PT1, 100};
@@ -798,6 +807,14 @@ class ModelConfig
       [PIN_SERIAL_2_TX] = XSFC_SERIAL_2_TX,
       [PIN_SERIAL_2_RX] = XSFC_SERIAL_2_RX,
 #endif
+#ifdef XSFC_SERIAL_3
+      [PIN_SERIAL_3_TX] = XSFC_SERIAL_3_TX,
+      [PIN_SERIAL_3_RX] = XSFC_SERIAL_3_RX,
+#endif
+#ifdef XSFC_SERIAL_4
+      [PIN_SERIAL_4_TX] = XSFC_SERIAL_4_TX,
+      [PIN_SERIAL_4_RX] = XSFC_SERIAL_4_RX,
+#endif
 #ifdef XSFC_I2C_0
       [PIN_I2C_0_SCL] = XSFC_I2C_0_SCL,
       [PIN_I2C_0_SDA] = XSFC_I2C_0_SDA,
@@ -829,6 +846,12 @@ class ModelConfig
 #endif
 #ifdef XSFC_SERIAL_2
       [SERIAL_UART_2] = { .id = SERIAL_ID_UART_3, .functionMask = XSFC_SERIAL_2_FN, .baud = XSFC_SERIAL_2_BAUD, .blackboxBaud = XSFC_SERIAL_2_BBAUD },
+#endif
+#ifdef XSFC_SERIAL_3
+      [SERIAL_UART_3] = { .id = SERIAL_ID_UART_4, .functionMask = XSFC_SERIAL_3_FN, .baud = XSFC_SERIAL_3_BAUD, .blackboxBaud = XSFC_SERIAL_3_BBAUD },
+#endif
+#ifdef XSFC_SERIAL_4
+      [SERIAL_UART_4] = { .id = SERIAL_ID_UART_5, .functionMask = XSFC_SERIAL_4_FN, .baud = XSFC_SERIAL_4_BAUD, .blackboxBaud = XSFC_SERIAL_4_BBAUD },
 #endif
 #ifdef XSFC_SERIAL_SOFT_0
       [SERIAL_SOFT_0] = { .id = SERIAL_ID_SOFTSERIAL_1, .functionMask = XSFC_SERIAL_SOFT_0_FN, .baud = SERIAL_SPEED_115200, .blackboxBaud = SERIAL_SPEED_NONE },

@@ -51,7 +51,7 @@ int FAST_CODE_ATTR Timer::update(uint32_t now)
   next = now + interval;
   delta = now - last;
   last = now;
-  iteration++;
+  iteration = iteration + 1;
   return 1;
 }
 

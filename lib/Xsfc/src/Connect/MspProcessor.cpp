@@ -5,9 +5,7 @@
 #include <platform.h>
 #include <algorithm>
 #include <limits>
-#if defined(XSFC_MULTI_CORE) && defined(XSFC_FREE_RTOS)
-#include <driver/timer.h>
-#endif
+#include "Target/GyroTimer.h"
 
 #define VTXCOMMON_MSP_BANDCHAN_CHKVAL ((uint16_t)((7 << 3) + 7))
 
@@ -1161,7 +1159,9 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
       r.writeU16(_model.config.gyro.notch2Filter.freq);    // gyro notch 2 hz
       r.writeU16(_model.config.gyro.notch2Filter.cutoff);  // gyro notch 2 cutoff
       r.writeU8(_model.config.dterm.filter.type);          // dterm type
-      r.writeU8(fromGyroDlpf(_model.config.gyro.dlpf));
+      r.writeU8(fromGyroDlpf(_model.state.gyro.dev ?
+        _model.state.gyro.dev->resolveDLPFMode(_model.config.gyro.dlpf) :
+        (_model.config.gyro.dlpf == GYRO_DLPF_AUTO ? GYRO_DLPF_256 : _model.config.gyro.dlpf)));
       r.writeU8(0);                                        // dlfp 32khz type
       r.writeU16(_model.config.gyro.filter.freq);          // lowpass1 freq
       r.writeU16(_model.config.gyro.filter2.freq);         // lowpass2 freq
@@ -1748,7 +1748,7 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
 void MspProcessor::processEsc4way()
 {
 #if defined(XSFC_MULTI_CORE) && defined(XSFC_FREE_RTOS)
-  timer_pause(TIMER_GROUP_0, TIMER_0);
+  gyroTimerStop();
 #endif
   esc4wayProcess(getSerialPort());
   processRestart();

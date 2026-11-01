@@ -57,6 +57,13 @@ bool BusSPI::write(uint8_t devAddr, uint8_t regAddr, uint8_t length, const uint8
   return true;
 }
 
+int8_t BusSPI::readAtSpeed(uint8_t devAddr, uint8_t regAddr, uint8_t length, uint8_t* data, uint32_t speed)
+{
+  if(!data || !length || !speed) return 0;
+  transfer(devAddr, regAddr | SPI_READ, length, nullptr, data, speed);
+  return length;
+}
+
 void FAST_CODE_ATTR BusSPI::transfer(uint8_t devAddr, uint8_t regAddr, uint8_t length, const uint8_t* in, uint8_t* out,
                                      uint32_t speed)
 {
