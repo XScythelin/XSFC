@@ -1,0 +1,26 @@
+XSFC — license notice
+
+Copyright (c) 2026 XScythelin, for original contributions authored by XScythelin.
+Other contributors and upstream authors retain copyright in their contributions.
+
+Original XSFC contributions covered by this notice are licensed under the
+GNU General Public License, version 3 only (SPDX: GPL-3.0-only).
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+The complete GPL version 3 terms are included in COPYING and available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+https://www.gnu.org/licenses/gpl-3.0.html
+
+This notice does not relicense third-party code, claim ownership of upstream
+work, or remove permissions granted by upstream authors. Existing per-file and
+component license notices govern the respective third-party materials. See
+THIRD_PARTY_NOTICES.md. License compatibility of every bundled component has
+not yet been fully audited; this notice is not a certification of compliance
+for any combined binary distribution.

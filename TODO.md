@@ -1,5 +1,12 @@
 # TODO XSFC
 
+- [x] Общий технический README: архитектура, подсистемы, драйверы, CLI,
+  платформы, сборка, диагностика и тесты;
+  GPL-3.0-only для оригинальных изменений XScythelin и third-party notices.
+- [ ] Завершить аудит происхождения/лицензий bundled code, в частности
+  GPLv2 Kalman.h и совместимость с GPLv3; комплектовать распространяемые
+  копии полными текстами применимых лицензий.
+
 - [x] ESC BEEPER: стандартная DShot BEEP1-команда через Mixer при disarm
   и нулевом газе, раз в 500 мс, telemetry-request bit, one-shot async TX.
   Документация: docs/ESC-BEEPER.md; host tests расписания и DShot encoding.
