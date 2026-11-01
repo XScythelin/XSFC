@@ -7,6 +7,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class P4PinsTests(unittest.TestCase):
+    def test_p4_spi_rate_and_pid_defaults(self):
+        target = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
+        self.assertRegex(target, r'#define\s+XSFC_GYRO_SPI_RATE_MAX\s+8000\b')
+        self.assertRegex(target, r'#define\s+XSFC_GYRO_I2C_RATE_MAX\s+2000\b')
+        config = (ROOT / 'lib/Xsfc/src/ModelConfig.h').read_text()
+        self.assertRegex(config, r'#if defined\(ESP32P4\)\s+int8_t loopSync = 2;')
+        self.assertRegex(config, r'#else\s+int8_t loopSync = 8;')
+
     def test_dynamic_filter_enabled_by_default(self):
         source = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
         mask = re.search(r'^#define\s+XSFC_FEATURE_MASK\s+(.+)$', source, re.MULTILINE)

@@ -35,6 +35,7 @@ class GyroDevice: public BusAwareDevice
     
     virtual int readGyro(VectorInt16& v) = 0;
     virtual int readAccel(VectorInt16& v) = 0;
+    virtual void prepareCombinedRead(bool accelDue) { (void)accelDue; }
 
     virtual void setDLPFMode(uint8_t mode) = 0;
     // CLI AUTO keeps legacy behavior for other IMUs, enables DLPF on ICM20948.

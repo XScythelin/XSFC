@@ -60,7 +60,12 @@ int FAST_CODE_ATTR Xsfc::update(bool externalTrigger)
   {
     if(!_model.state.gyro.timer.check()) return 0;
   }
+#if defined(XSFC_MULTI_CORE)
+  // gyroTask is pinned to physical CPU1; single-core builds retain CPU0.
+  Utils::Stats::Measure measure(_model.state.stats, COUNTER_CPU_1);
+#else
   Utils::Stats::Measure measure(_model.state.stats, COUNTER_CPU_0);
+#endif
 
 #if defined(XSFC_MULTI_CORE)
 
@@ -116,7 +121,8 @@ int FAST_CODE_ATTR Xsfc::updateOther()
   }
   Event e = _model.state.appQueue.receive();
 
-  Utils::Stats::Measure measure(_model.state.stats, COUNTER_CPU_1);
+  // pidTask is pinned to physical CPU0.
+  Utils::Stats::Measure measure(_model.state.stats, COUNTER_CPU_0);
 
   switch(e.type)
   {

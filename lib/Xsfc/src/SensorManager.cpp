@@ -26,6 +26,11 @@ int SensorManager::begin()
 
 int FAST_CODE_ATTR SensorManager::read()
 {
+  const auto& accelTimer = _model.state.accel.timer;
+  const bool accelDue = accelTimer.denom > 0
+    ? (_model.state.gyro.timer.iteration % accelTimer.denom == 0)
+    : (accelTimer.interval != 0 && micros() >= accelTimer.next);
+  if(_model.state.gyro.dev) _model.state.gyro.dev->prepareCombinedRead(accelDue && _model.accelActive());
   const bool gyroRead = _gyro.read() != 0;
 
   if(_model.state.loopTimer.syncTo(_model.state.gyro.timer) && gyroRead)

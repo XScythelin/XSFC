@@ -155,10 +155,16 @@ void Hardware::initBus()
       .logln(spiResult);
 #endif
 #if defined(XSFC_I2C_0)
-  // Use a conservative common ceiling during detection AND normal operation.
+  // Use the same ceiling during detection AND normal operation.
   // Do not modify the persisted user setting.
   const uint32_t requestedSpeed = _model.config.i2cSpeed * 1000ul;
-  const uint32_t actualSpeed = requestedSpeed > 400000ul ? 400000ul : requestedSpeed;
+#if defined(ESP32P4)
+  // multicore_tests: temporary 800kHz I2C experiment; other targets unchanged.
+  constexpr uint32_t maxSpeed = 800000ul;
+#else
+  constexpr uint32_t maxSpeed = 400000ul;
+#endif
+  const uint32_t actualSpeed = requestedSpeed > maxSpeed ? maxSpeed : requestedSpeed;
   int i2cResult =
       i2cBus.begin(_model.config.pin[PIN_I2C_0_SDA], _model.config.pin[PIN_I2C_0_SCL], actualSpeed);
   i2cBus.onError = std::bind(&Hardware::onI2CError, this);

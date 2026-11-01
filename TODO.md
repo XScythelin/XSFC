@@ -1,5 +1,60 @@
 # TODO XSFC
 
+## multicore_tests — cleanup and SPI preparation
+
+- [x] User reports PID8kHz/mixer4kHz did not improve errors; output frequency
+  alone does not explain regression. No verified PID8kHz telemetry fix.
+- [x] P4 defaults: SPI gyro8kHz, pid_sync2/mixer_sync1 => PID/mixer4kHz.
+  PID8kHz remains selectable via pid_sync1; saved settings are not overwritten.
+  I2C first-use path retains its existing pid_sync1 behavior at gyro2kHz.
+- [x] Final P4 build and ICM42688 ASan/UBSan test passed, plus4 Python
+  checks. Hardware PID4kHz telemetry~1% is user-reported, not flight validation.
+
+- [x] CPU counters now follow physical cores: CPU0 PID/mixer, CPU1 gyro
+  on dual-core targets; MSP XC ordering updated together. Single-core update
+  retains CPU0. No task migration or timing instrumentation added.
+- [ ] Known limitation: user reports near100% bidirectional DShot errors
+  on DShot300 AND600 despite some RPM. Check mixer_sync2/4 with gyro/PID8kHz
+  to isolate output/receive window. Missing or bad samples remain real errors;
+  retained last-good RPM does not prove every response arrived.
+- [x] Hardware follow-up: setting PID4kHz reduces reported telemetry errors
+  to~1%. This also reduces mixer rate, so CPU contention vs RX-window timing
+  is not isolated. Next test: pid_sync1/mixer_sync2 (gyro/PID8kHz, mixer4kHz).
+
+- [x] User confirms ICM42688 SPI detection after saved pin mapping
+  MOSI29/MISO30/SCK28/CS32; stats reports4kHz, CPU1 work~18%, CPU0~32%.
+  These wall-time percentages do not validate ESC timing or prior reset issue.
+- [x] User-requested P4 SPI gyro cap raised to8000Hz for bench test;
+  I2C cap remains2000Hz. Saved PID/mixer dividers unchanged, no profiling added.
+- [ ] Validate8kHz acquisition/PID/output timing and bidirectional DShot
+  telemetry on hardware. If unstable restore SPI cap4000Hz; PID/mixer can
+  be reduced independently with pid_sync2. No flight validation claimed.
+
+- [x] P4 4kHz I2C experiment cancelled by user: gyro cap restored to2000Hz.
+  I2C ceiling800kHz retained (default i2cSpeed already800); saved settings,
+  combined reads and other targets unchanged. No profiling reintroduced.
+- [ ] Validate 800kHz/2kHz timing, delayed NACK and ESC stability on bench.
+  Not flight validated; restore I2C ceiling400kHz if bus experiment is reverted.
+
+- [x] Restore ICM42688 combined accel+gyro reads by default on accel-due
+  cycles; retain 6-byte gyro-only reads and single-use cache/short-read safety.
+- [x] Remove analysis-only FlightTiming, cpustats, task snapshots, event
+  timestamps, I2C profiling, section maxima and added atomic accumulators.
+  Keep baseline stats, CPU status extension, ibatinfo and checked IMU reads.
+- [x] Restore main PID polling, queue and mixer scheduling exactly; remove
+  experimental consumer notifications/wait path, not just disable a flag.
+- [ ] SAFETY: intermittent ESC sounds/reset reported; actual reset vs DShot
+  dropout/beacon unknown. Rollback is mitigation, NOT verified repair.
+  Validate disarmed on bench first; no flight validation claimed.
+- [ ] Delayed I2C unexpected NACK / ESP_ERR_INVALID_STATE remains unresolved;
+  no automatic retry/reset or bus speed change added.
+- [x] Retain 360MHz; 400MHz experiment cancelled.
+- [ ] SPI wiring/module mode confirmation and hardware validation required.
+  Default P4 pins: SCK28, MOSI30, MISO29, CS32. Motors33/49/50/52 unchanged.
+- [x] Cleanup P4 production build passed; native ICM42688 ASan/UBSan
+  tests passed (6/12-byte reads, cache invalidation, short reads and mocked
+  explicit-CS dispatch), plus 3 Python checks. Hardware still unvalidated.
+
 - [x] Follow-up hardware report: user confirms stable operation after restart.
   Supplied escinfo shows configured/effective telemetry=1, all four outputs
   init_error=0, DSHOT300. This confirms initialization, not telemetry under load.

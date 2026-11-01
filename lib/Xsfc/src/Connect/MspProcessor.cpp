@@ -318,8 +318,8 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
         r.writeU8('C');
         r.writeU8(1);
         r.writeU8(2);
-        r.writeU16(constrain(lrintf(_model.state.stats.getLoad(COUNTER_CPU_1) * 10.f), 0l, 1000l));
         r.writeU16(constrain(lrintf(_model.state.stats.getLoad(COUNTER_CPU_0) * 10.f), 0l, 1000l));
+        r.writeU16(constrain(lrintf(_model.state.stats.getLoad(COUNTER_CPU_1) * 10.f), 0l, 1000l));
       }
 #endif
       break;

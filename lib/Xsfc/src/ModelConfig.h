@@ -872,7 +872,11 @@ class ModelConfig
 
     // not classified yet
     int16_t i2cSpeed = 800;
+#if defined(ESP32P4)
+    int8_t loopSync = 2; // SPI gyro 8kHz, PID 4kHz by default; 1 remains selectable.
+#else
     int8_t loopSync = 8; // MPU 1000Hz
+#endif
     int8_t mixerSync = 1;
     int32_t featureMask = XSFC_FEATURE_MASK;
     bool telemetry = 0;
