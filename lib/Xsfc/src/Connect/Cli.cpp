@@ -1504,7 +1504,7 @@ void Cli::execute(CliCmd& cmd, Stream& s)
   }
   else if(strcmp_P(cmd.args[0], PSTR("escinfo")) == 0)
   {
-    s.println(F("ESC telemetry counters since init; approximate cross-core snapshot"));
+    s.println(F("ESC initialization status; runtime diagnostics disabled"));
     s.print(F("configured telemetry="));
     s.println(_model.config.output.dshotTelemetry);
     auto* motor = _model.state.mixer.escMotor;
@@ -1515,21 +1515,7 @@ void Cli::execute(CliCmd& cmd, Stream& s)
       const auto d = motor->telemetryStats(i);
       s.print(F("M")); s.print(i + 1);
       s.print(F(" pin=")); s.print(motor->pin(i));
-      s.print(F(" init_error=")); s.print(d.initError);
-      s.print(F(" tx_done=")); s.print(d.txDone);
-      s.print(F(" rx_armed=")); s.print(d.rxArmed);
-      s.print(F(" packets=")); s.print(d.packets);
-      s.print(F(" valid=")); s.print(d.valid);
-      s.print(F(" invalid=")); s.print(d.invalid);
-      s.print(F(" last_items=")); s.print(d.items);
-      s.print(F(" first=0x")); s.print(d.firstItem, HEX);
-      s.print(F(" gcr=0x")); s.print(d.gcr, HEX);
-      s.print(F(" rx_raw=0x")); s.print(d.rxStatus, HEX);
-      s.print(F(" rx_hw=0x")); s.print(d.rxHardware, HEX);
-      s.print(F(" rx_words=")); s.print(d.rxWords);
-      s.print(F(" rx_errors=")); s.print(d.rxErrors);
-      s.print(F(" line=")); s.print(d.lineLevel);
-      s.print(F(" missing=")); s.println(d.missing);
+      s.print(F(" init_error=")); s.println(d.initError);
     }
   }
   else if(strcmp_P(cmd.args[0], PSTR("stats")) == 0)

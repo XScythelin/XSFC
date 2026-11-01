@@ -1,5 +1,14 @@
 # TODO XSFC
 
+- [x] Удалена постоянная DShot runtime diagnostics по запросу пользователя:
+  TX/RX/packet/missing/invalid counters драйвера, чтение RX hw/words/GPIO
+  только для escinfo, сохранение последнего GCR/items и повторная CRC decode.
+  escinfo оставляет только pins/config/effective/init_error; status пишется
+  при инициализации, не на каждом кадре. Штатные errors/RPM в Mixer и их
+  CRC, RX_DONE polling и необходимое чтение RMT memory сохранены.
+- [ ] Hardware: проверить RPM и штатную статистику ошибок без runtime
+  diagnostics; RX sequence/IRQ core/priority в этом изменении не трогались.
+
 - [x] По явному запросу пользователя восстановлено состояние ESC-кода
   непосредственно ДО сообщения о нулевой ошибке DShot300: static GPIO routes,
   IRQ allocation на core 0, TX_DONE batch fast path, RX arm trim, idle 30 мкс,

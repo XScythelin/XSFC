@@ -111,13 +111,11 @@ void IRAM_ATTR EscDriverEsp32::rmtInterrupt(void*)
   {
     // These non-looping packets have already stopped at their end marker.
     // A second TX_STOP/config-update and the generic callback only delay RX.
-    // Acknowledge together, arm every receiver, then update diagnostics.
+    // Acknowledge together, then arm every receiver.
     rmt_ll_enable_interrupt(&RMT, completed, false);
     rmt_ll_clear_interrupt_status(&RMT, completed);
     for(uint32_t i = 0; i < ESC_CHANNEL_COUNT; ++i)
       if(receive & (1u << i)) instances[i]->enableRx(static_cast<rmt_channel_t>(i));
-    for(uint32_t i = 0; i < ESC_CHANNEL_COUNT; ++i)
-      if(receive & (1u << i)) instances[i]->_telemetryStats[i].txDone++;
     pending &= ~receive;
   }
   for(uint32_t i = 0; i < ESC_CHANNEL_COUNT; ++i)
@@ -237,7 +235,7 @@ uint32_t IRAM_ATTR EscDriverEsp32::telemetry(size_t channel) const
 
 EscDriverEsp32::TelemetryStats EscDriverEsp32::telemetryStats(size_t channel) const
 {
-  // Diagnostic snapshot only: counters may advance independently on the other core.
+  // Initialization status only; no per-frame diagnostic collection.
   if(channel >= ESC_CHANNEL_COUNT) return TelemetryStats{};
   return _telemetryStats[channel];
 }
@@ -449,7 +447,6 @@ void IRAM_ATTR EscDriverEsp32::enableRx(rmt_channel_t channel)
   _rmt_rx_zero_mem(channel, 2); // clear first item of rx buffer to avoid reading tx items
 #endif
   rmt_ll_rx_enable(&RMT, channel, true);
-  _telemetryStats[channel].rxArmed++;
 }
 
 void IRAM_ATTR EscDriverEsp32::disableRx(rmt_channel_t channel)
@@ -465,7 +462,6 @@ void IRAM_ATTR EscDriverEsp32::txDoneCallback(rmt_channel_t channel, void *arg)
 {
   auto instance = instances[channel];
   if(!instance) return;
-  instance->_telemetryStats[channel].txDone++;
   if(instance->_async)
   {
     instance->transmitOne(channel);
@@ -530,15 +526,8 @@ void IRAM_ATTR EscDriverEsp32::readTelemetry()
     // RX LL indices are 0..3; memory/GPIO indices are encoded as 4..7.
     _channel[i].telemetryValue = 0; // A missing response must not replay old RPM.
     const uint32_t status = rmt_ll_rx_get_interrupt_status_raw(&RMT, i);
-    auto& diagnostic = _telemetryStats[i];
-    diagnostic.rxStatus = status;
-    diagnostic.rxWords = rmt_ll_rx_get_memory_writer_offset(&RMT, i);
-    diagnostic.rxHardware = rmt_ll_rx_get_status_word(&RMT, i);
-    diagnostic.lineLevel = gpio_ll_get_level(&GPIO, _channel[i].pin);
-    if(status & RMT_LL_EVENT_RX_ERROR(i)) diagnostic.rxErrors++;
     if(!(status & RMT_LL_EVENT_RX_DONE(i)))
     {
-      diagnostic.missing++;
       continue;
     }
     disableRx(static_cast<rmt_channel_t>(i));
@@ -551,20 +540,9 @@ void IRAM_ATTR EscDriverEsp32::readTelemetry()
     rmt_ll_clear_interrupt_status(&RMT, RMT_LL_EVENT_RX_DONE(i) | RMT_LL_EVENT_RX_ERROR(i));
     if(!count)
     {
-      diagnostic.missing++;
       continue;
     }
     const uint32_t value = extractTelemetryGcr(capture, count, _channel[i].dshot_tlm_bit_len);
-    auto& stats = _telemetryStats[i];
-    stats.packets++;
-    stats.items = count;
-    stats.firstItem = capture[0];
-    stats.gcr = value;
-    if(gcrToRawValue(value) == INVALID_TELEMETRY_VALUE)
-    {
-      stats.invalid++;
-    }
-    else stats.valid++;
     _channel[i].telemetryValue = value;
 #else
     RingbufHandle_t rb = NULL;
@@ -575,13 +553,6 @@ void IRAM_ATTR EscDriverEsp32::readTelemetry()
     if (data)
     {
       uint32_t value = extractTelemetryGcr((uint32_t*)data, rmt_len >> 2, _channel[i].dshot_tlm_bit_len);
-      auto& stats = _telemetryStats[i];
-      stats.packets++;
-      stats.items = rmt_len / sizeof(rmt_item32_t);
-      stats.firstItem = rmt_len >= sizeof(rmt_item32_t) ? data[0].val : 0;
-      stats.gcr = value;
-      if(gcrToRawValue(value) == INVALID_TELEMETRY_VALUE) stats.invalid++;
-      else stats.valid++;
 
       vRingbufferReturnItem(rb, (void *)data);
       

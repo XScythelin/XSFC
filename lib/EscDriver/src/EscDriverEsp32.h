@@ -88,20 +88,6 @@ class EscDriverEsp32: public EscDriverBase
     uint32_t telemetry(size_t channel) const;
     struct TelemetryStats
     {
-      uint32_t txDone = 0;
-      uint32_t rxArmed = 0;
-      uint32_t packets = 0;
-      uint32_t valid = 0;
-      uint32_t invalid = 0;
-      uint32_t items = 0;
-      uint32_t firstItem = 0;
-      uint32_t gcr = 0;
-      uint32_t rxStatus = 0;
-      uint32_t rxWords = 0;
-      uint32_t rxHardware = 0;
-      uint32_t rxErrors = 0;
-      uint32_t lineLevel = 0;
-      uint32_t missing = 0;
       int32_t initError = 0;
     };
     TelemetryStats telemetryStats(size_t channel) const;
