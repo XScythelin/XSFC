@@ -1016,7 +1016,7 @@ void Cli::execute(CliCmd& cmd, Stream& s)
       PSTR("available commands:"),
       PSTR(" help"), PSTR(" dump"), PSTR(" get param"), PSTR(" set param value ..."), PSTR(" cal [gyro]"),
       PSTR(" defaults"), PSTR(" save"), PSTR(" reboot"), PSTR(" scaler"), PSTR(" mixer"),
-      PSTR(" stats"), PSTR(" status"), PSTR(" devinfo"), PSTR(" version"), PSTR(" logs"), PSTR(" gps [set_home|clear_home]"),
+      PSTR(" stats"), PSTR(" status"), PSTR(" devinfo"), PSTR(" escinfo"), PSTR(" version"), PSTR(" logs"), PSTR(" gps [set_home|clear_home]"),
       PSTR(" baro"), PSTR(" rangefinder"), PSTR(" flow"), PSTR(" flow watch [ms|stop]"),
       //PSTR(" load"), PSTR(" eeprom"),
       //PSTR(" fsinfo"), PSTR(" fsformat"), PSTR(" log"),
@@ -1500,6 +1500,36 @@ void Cli::execute(CliCmd& cmd, Stream& s)
     else
     {
       printFlowStatus(s);
+    }
+  }
+  else if(strcmp_P(cmd.args[0], PSTR("escinfo")) == 0)
+  {
+    s.println(F("ESC telemetry counters since init; approximate cross-core snapshot"));
+    s.print(F("configured telemetry="));
+    s.println(_model.config.output.dshotTelemetry);
+    auto* motor = _model.state.mixer.escMotor;
+    if(!motor) { s.println(F("Motor driver not initialized")); return; }
+    s.print(F("effective telemetry=")); s.println(motor->telemetryEnabled());
+    for(size_t i = 0; i < ESC_CHANNEL_COUNT; ++i)
+    {
+      const auto d = motor->telemetryStats(i);
+      s.print(F("M")); s.print(i + 1);
+      s.print(F(" pin=")); s.print(motor->pin(i));
+      s.print(F(" init_error=")); s.print(d.initError);
+      s.print(F(" tx_done=")); s.print(d.txDone);
+      s.print(F(" rx_armed=")); s.print(d.rxArmed);
+      s.print(F(" packets=")); s.print(d.packets);
+      s.print(F(" valid=")); s.print(d.valid);
+      s.print(F(" invalid=")); s.print(d.invalid);
+      s.print(F(" last_items=")); s.print(d.items);
+      s.print(F(" first=0x")); s.print(d.firstItem, HEX);
+      s.print(F(" gcr=0x")); s.print(d.gcr, HEX);
+      s.print(F(" rx_raw=0x")); s.print(d.rxStatus, HEX);
+      s.print(F(" rx_hw=0x")); s.print(d.rxHardware, HEX);
+      s.print(F(" rx_words=")); s.print(d.rxWords);
+      s.print(F(" rx_errors=")); s.print(d.rxErrors);
+      s.print(F(" line=")); s.print(d.lineLevel);
+      s.print(F(" missing=")); s.println(d.missing);
     }
   }
   else if(strcmp_P(cmd.args[0], PSTR("stats")) == 0)

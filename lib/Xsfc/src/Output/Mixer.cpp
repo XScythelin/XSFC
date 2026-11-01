@@ -19,6 +19,10 @@ int Mixer::begin()
     .dshotTelemetry = !!_model.config.output.dshotTelemetry,
   };
   escMotor.begin(motorConf);
+  if(motorConf.dshotTelemetry && !escMotor.telemetryEnabled())
+  {
+    _model.logger.info().logln(F("DSHOT telemetry unavailable for selected protocol"));
+  }
   _model.state.mixer.escMotor = _motor = &escMotor;
   _model.logger.info().log(F("MOTOR")).log(FPSTR(EscDriver::getProtocolName((EscProtocol)_model.config.output.protocol))).log(_model.config.output.async).log(_model.config.output.rate).log(_model.config.output.dshotTelemetry).logln(ESC_DRIVER_MOTOR_TIMER);
 
@@ -295,11 +299,13 @@ void FAST_CODE_ATTR Mixer::writeOutput(const MixerConfig& mixer, float * out)
 void FAST_CODE_ATTR Mixer::readTelemetry()
 {
   Utils::Stats::Measure mixerMeasure(_model.state.stats, COUNTER_MIXER_READ);
-  if(!_model.config.output.dshotTelemetry || !_motor) return;
+  if(!_motor || !_motor->telemetryEnabled()) return;
+  _motor->collectTelemetry();
 
   for(size_t i = 0; i < OUTPUT_CHANNELS; i++)
   {
     if(_model.config.output.channel[i].servo) continue;
+    if(!_motor->telemetryAttempted(i)) continue;
     uint32_t value = _motor->telemetry(i);
     value = EscDriver::gcrToRawValue(value);
 

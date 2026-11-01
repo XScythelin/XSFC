@@ -86,6 +86,28 @@ class EscDriverEsp32: public EscDriverBase
     void apply();
     int pin(size_t channel) const;
     uint32_t telemetry(size_t channel) const;
+    struct TelemetryStats
+    {
+      uint32_t txDone = 0;
+      uint32_t rxArmed = 0;
+      uint32_t packets = 0;
+      uint32_t valid = 0;
+      uint32_t invalid = 0;
+      uint32_t items = 0;
+      uint32_t firstItem = 0;
+      uint32_t gcr = 0;
+      uint32_t rxStatus = 0;
+      uint32_t rxWords = 0;
+      uint32_t rxHardware = 0;
+      uint32_t rxErrors = 0;
+      uint32_t lineLevel = 0;
+      uint32_t missing = 0;
+      int32_t initError = 0;
+    };
+    TelemetryStats telemetryStats(size_t channel) const;
+    bool telemetryEnabled() const { return _dshot_tlm; }
+    void collectTelemetry();
+    bool telemetryAttempted(size_t channel) const;
 
   private:
     void initChannel(int channel, gpio_num_t pin, int pulse);
@@ -96,6 +118,11 @@ class EscDriverEsp32: public EscDriverBase
     void disableTx(rmt_channel_t channel);
     void disableRx(rmt_channel_t channel);
     static void txDoneCallback(rmt_channel_t channel, void *arg);
+#if defined(ESP32P4)
+    static void rmtInterrupt(void* arg);
+    static rmt_isr_handle_t _interruptHandle;
+    static bool _interruptAllocationAttempted;
+#endif
     void transmitOne(uint32_t i);
     void transmitAll();
     void readTelemetry();
@@ -110,6 +137,11 @@ class EscDriverEsp32: public EscDriverBase
     bool isDigital(EscProtocol protocol) const;
 
     Slot _channel[ESC_CHANNEL_COUNT];
+    TelemetryStats _telemetryStats[ESC_CHANNEL_COUNT];
+#if defined(ESP32P4)
+    bool _responsePending[ESC_CHANNEL_COUNT] = {};
+    bool _responseAttempted[ESC_CHANNEL_COUNT] = {};
+#endif
     EscProtocol _protocol;
     int32_t _async;
     int32_t _rate;

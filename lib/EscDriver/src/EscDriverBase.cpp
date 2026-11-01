@@ -66,6 +66,7 @@ uint32_t IRAM_ATTR EscDriverBase::pushBits(uint32_t value, uint32_t bitVal, size
  */
 uint32_t IRAM_ATTR EscDriverBase::extractTelemetryGcr(uint32_t* data, size_t len, uint32_t bitLen)
 {
+  if(!data || !len || !bitLen) return 0;
   int bitCount = 0;
   uint32_t value = 0;
   for(size_t i = 0; i < len; i++)
@@ -74,21 +75,36 @@ uint32_t IRAM_ATTR EscDriverBase::extractTelemetryGcr(uint32_t* data, size_t len
     if(!duration0) break;
     uint32_t level0 = (data[i] >> 15) & 0x01;
     uint32_t len0 = durationToBitLen(duration0, bitLen);
+    if(len0 > uint32_t(21 - bitCount))
+    {
+      // RMT may include the final HIGH idle timeout in the last run.
+      const bool terminal = !(data[i] & 0x7fff0000u);
+      if(!level0 || !terminal) return 0;
+      len0 = 21 - bitCount;
+    }
     if(len0)
     {
       value = pushBits(value, level0, len0);
       bitCount += len0;
     }
+    if(bitCount == 21) return value;
 
     uint32_t duration1 = (data[i] >> 16) & 0x7fff;
     if(!duration1) break;
     uint32_t level1 = (data[i] >> 31) & 0x01;
     uint32_t len1 = durationToBitLen(duration1, bitLen);
+    if(len1 > uint32_t(21 - bitCount))
+    {
+      const bool terminal = i + 1 == len || !(data[i + 1] & 0x7fff);
+      if(!level1 || !terminal) return 0;
+      len1 = 21 - bitCount;
+    }
     if(len1)
     {
       value = pushBits(value, level1, len1);
       bitCount += len1;
     }
+    if(bitCount == 21) return value;
   }
 
   // fill missing bits with 1

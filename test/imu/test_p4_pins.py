@@ -7,6 +7,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class P4PinsTests(unittest.TestCase):
+    def test_dynamic_filter_enabled_by_default(self):
+        source = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
+        mask = re.search(r'^#define\s+XSFC_FEATURE_MASK\s+(.+)$', source, re.MULTILINE)
+        self.assertIsNotNone(mask)
+        self.assertIn('FEATURE_DYNAMIC_FILTER', mask.group(1))
+        config = (ROOT / 'lib/Xsfc/src/ModelConfig.h').read_text()
+        self.assertRegex(config, r'featureMask\s*=\s*XSFC_FEATURE_MASK\s*;')
+
     def test_motor_defaults_do_not_overlap_bus_pins(self):
         source = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
         pins = {name: int(value) for name, value in re.findall(

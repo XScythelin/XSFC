@@ -15,6 +15,20 @@ bluejay:b=570,o=5,d=16:8e,p,8b
 
 ## Режим BEEPER
 
+### Влияние Bluejay beacon на телеметрию
+
+В проверенных upstream-исходниках Bluejay (`src/Modules/DShot.asm`,
+`dshot_cmd_beeps_check`) команды BEEP1–5 отключают interrupts ESC,
+вызывают `beacon_beep`, затем `wait200ms` и только после этого включают
+interrupts. Во время этого участка нормальная bidirectional DShot
+телеметрия недоступна; возможна задержка реакции ESC на последующие команды.
+Поэтому высокий error rate во время beacon не равнозначен ошибке RMT RX.
+Точный процент зависит от версии ESC firmware, длительности звука и
+интервала команд XSFC (500 мс); на пользовательской плате наблюдалось 62.5%.
+Это не объясняет ошибки вне режима BEEPER.
+
+Источник: https://github.com/bird-sanctuary/bluejay/blob/main/src/Modules/DShot.asm
+
 Настройте AUX-диапазон BEEPER в Betaflight Configurator. При включении режима
 XSFC отправляет BEEP1 (DShot command 1 с telemetry-request bit) на все
 подключённые моторные выходы. Внешняя пищалка не требуется.
