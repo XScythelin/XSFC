@@ -5,6 +5,7 @@
 #include "Device/GyroDevice.h"
 #include "Hal/Pgm.h"
 #include "msp/msp_protocol.h"
+#include "Sensor/CurrentConversion.hpp"
 
 #ifdef USE_FLASHFS
 #include "Device/FlashDevice.h"
@@ -1016,7 +1017,7 @@ void Cli::execute(CliCmd& cmd, Stream& s)
       PSTR("available commands:"),
       PSTR(" help"), PSTR(" dump"), PSTR(" get param"), PSTR(" set param value ..."), PSTR(" cal [gyro]"),
       PSTR(" defaults"), PSTR(" save"), PSTR(" reboot"), PSTR(" scaler"), PSTR(" mixer"),
-      PSTR(" stats"), PSTR(" status"), PSTR(" devinfo"), PSTR(" escinfo"), PSTR(" version"), PSTR(" logs"), PSTR(" gps [set_home|clear_home]"),
+      PSTR(" stats"), PSTR(" status"), PSTR(" devinfo"), PSTR(" escinfo"), PSTR(" ibatinfo"), PSTR(" version"), PSTR(" logs"), PSTR(" gps [set_home|clear_home]"),
       PSTR(" baro"), PSTR(" rangefinder"), PSTR(" flow"), PSTR(" flow watch [ms|stop]"),
       //PSTR(" load"), PSTR(" eeprom"),
       //PSTR(" fsinfo"), PSTR(" fsformat"), PSTR(" log"),
@@ -1026,6 +1027,24 @@ void Cli::execute(CliCmd& cmd, Stream& s)
     {
       s.println(FPSTR(*ptr));
     }
+  }
+  else if(strcmp_P(cmd.args[0], PSTR("ibatinfo")) == 0)
+  {
+#ifdef XSFC_ADC_1
+    const int pin = _model.config.pin[PIN_INPUT_ADC_1];
+    const auto& battery = _model.state.battery;
+    const float adcVolts = battery.rawCurrent * XSFC_ADC_SCALE;
+    s.printf("source=%d pin=%d enabled=%d scale=%d offset=%d\r\n",
+      (int)_model.config.ibat.source, pin,
+      (int)Sensor::currentAdcEnabled(_model.config.ibat.source, pin),
+      (int)_model.config.ibat.scale, (int)_model.config.ibat.offset);
+    s.printf("last_raw=%lu estimated_adc_mV=%.2f unfiltered_A=%.3f filtered_A=%.3f\r\n",
+      (unsigned long)battery.rawCurrent, adcVolts * 1000.0f,
+      battery.currentUnfiltered, battery.current);
+    s.println(F("ADC voltage is an estimate, not a calibrated measurement; disabled source leaves stale samples."));
+#else
+    s.println(F("Current ADC not available on this target"));
+#endif
   }
   else if(strcmp_P(cmd.args[0], PSTR("version")) == 0)
   {

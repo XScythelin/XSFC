@@ -1,4 +1,5 @@
 #include "VoltageSensor.h"
+#include "CurrentConversion.hpp"
 
 #include <algorithm>
 
@@ -85,14 +86,13 @@ int VoltageSensor::readVbat()
 int VoltageSensor::readIbat()
 {
 #ifdef XSFC_ADC_1
-  if (_model.config.ibat.source != 1 && _model.config.pin[PIN_INPUT_ADC_1] == -1) return 0;
+  if (!currentAdcEnabled(_model.config.ibat.source, _model.config.pin[PIN_INPUT_ADC_1])) return 0;
 
   _model.state.battery.rawCurrent = analogRead(_model.config.pin[PIN_INPUT_ADC_1]);
   float volts = _iFilterFast.update(_model.state.battery.rawCurrent * XSFC_ADC_SCALE);
   float milivolts = volts * 1000.0f;
 
-  volts += _model.config.ibat.offset * 0.001f;
-  volts *= _model.config.ibat.scale * 0.1f;
+  volts = currentFromVolts(volts, _model.config.ibat.scale, _model.config.ibat.offset);
 
   _model.state.battery.currentUnfiltered = volts;
   _model.state.battery.current = _iFilter.update(_model.state.battery.currentUnfiltered);

@@ -32,12 +32,20 @@ constexpr FlightModeInfo FLIGHT_MODES[] = {
   {MODE_ARMED, "ARM"}, {MODE_AIRMODE, "AIRMODE"}, {MODE_ANGLE, "ANGLE"},
   {MODE_ALTHOLD, "ALTHOLD"}, {MODE_BUZZER, "BEEPER"}, {MODE_FAILSAFE, "FAILSAFE"},
   {MODE_BLACKBOX, "BLACKBOX"}, {MODE_BLACKBOX_ERASE, "BLACKBOXERASE"},
-  {MODE_GPIO_OUTPUT, "GPIO"}, {MODE_MAG, "MAG"},
+#if !defined(ESP32P4)
+  {MODE_GPIO_OUTPUT, "GPIO"},
+#endif
+  {MODE_MAG, "MAG"},
   {MODE_POSHOLD, "POSHOLD"}, {MODE_RANGEHOLD, "RANGEHOLD"}
 };
 
 constexpr uint32_t modeBit(FlightMode mode) { return 1u << mode; }
-constexpr bool isKnownFlightMode(uint8_t mode) { return mode < MODE_COUNT && mode != 8 && mode != 11 && mode != 12; }
+constexpr bool isKnownFlightMode(uint8_t mode) {
+#if defined(ESP32P4)
+  if (mode == MODE_GPIO_OUTPUT) return false;
+#endif
+  return mode < MODE_COUNT && mode != 8 && mode != 11 && mode != 12;
+}
 constexpr uint32_t RANGE_HOLD_MODES = modeBit(MODE_RANGEHOLD) | modeBit(MODE_POSHOLD);
 constexpr uint32_t BARO_HOLD_MODES = modeBit(MODE_ALTHOLD);
 constexpr uint32_t POSITION_HOLD_MODES = modeBit(MODE_POSHOLD);

@@ -70,8 +70,13 @@ static bool hasModeCondition(const Xsfc::Model& model, Xsfc::FlightMode mode)
 
 static bool isSpiCs0SharedWithGpioOutput(const Xsfc::Model& model)
 {
+#if defined(ESP32P4)
+  (void)model;
+  return false;
+#else
   return hasModeCondition(model, Xsfc::MODE_GPIO_OUTPUT) &&
          model.config.pin[Xsfc::PIN_SPI_CS0] == 5;
+#endif
 }
 } // namespace
 

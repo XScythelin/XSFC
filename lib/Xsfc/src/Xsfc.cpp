@@ -19,9 +19,11 @@ int Xsfc::load()
 
 int Xsfc::begin()
 {
+#if !defined(ESP32P4)
   // Keep AUX GPIO output deterministic during startup and reconnect cycles.
   Hal::Gpio::pinMode(5, OUTPUT);
   Hal::Gpio::digitalWrite(5, LOW);
+#endif
 
   _model.state.led.begin(_model.config.pin[PIN_LED_BLINK], _model.config.led.type, _model.config.led.invert);
 
@@ -29,8 +31,10 @@ int Xsfc::begin()
   //_model.logStorageResult();
   _hardware.begin();    // requires _model.load()
 
+#if !defined(ESP32P4)
   // Hardware probing may touch shared pins (e.g. SPI CS). Re-assert GPIO5 low.
   Hal::Gpio::digitalWrite(5, LOW);
+#endif
 
   _model.begin();       // requires _hardware.begin()
   _mixer.begin();

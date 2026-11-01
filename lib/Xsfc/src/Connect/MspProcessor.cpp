@@ -311,6 +311,17 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
       r.writeU8(ARMING_DISABLED_FLAGS_COUNT);  // 1 byte, flag count
       r.writeU32(_model.state.mode.armingDisabledFlags);  // 4 bytes, flags
       r.writeU8(_model.configurationPending ? 1 : 0); // reboot required
+#if defined(XSFC_MULTI_CORE)
+      if (m.cmd == MSP_STATUS_EX) {
+        // Versioned XSFC tail: physical core loads in tenths of a percent.
+        r.writeU8('X');
+        r.writeU8('C');
+        r.writeU8(1);
+        r.writeU8(2);
+        r.writeU16(constrain(lrintf(_model.state.stats.getLoad(COUNTER_CPU_1) * 10.f), 0l, 1000l));
+        r.writeU16(constrain(lrintf(_model.state.stats.getLoad(COUNTER_CPU_0) * 10.f), 0l, 1000l));
+      }
+#endif
       break;
 
     case MSP_NAME:

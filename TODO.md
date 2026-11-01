@@ -1,5 +1,38 @@
 # TODO XSFC
 
+- [x] Follow-up hardware report: user confirms stable operation after restart.
+  Supplied escinfo shows configured/effective telemetry=1, all four outputs
+  init_error=0, DSHOT300. This confirms initialization, not telemetry under load.
+  Constant-zero current explained by saved ibat_source NONE (scale 100,
+  offset 0); select ADC explicitly, do not silently enable disabled sources.
+- [x] Regression checks: exhaustive 4096-payload DShot decoder/capture test
+  with ASan/UBSan; P4 and non-P4 mode-ID/mask tests; current enable/conversion
+  native tests; 3 Python layout/pin checks. P4 production build passed.
+
+- [ ] User hardware report: ESC CUR connected to P4 GPIO21 reads ~0.8 A at
+  maximum motor output. ESC identified as Skystars KO55II 55Ax4 25V 3-6S,
+  running Bluejay; exact revision CUR sensitivity remains unconfirmed.
+  Verify ESC CUR sensitivity, ibat_scale/offset and
+  calibrated ADC millivolts before claiming correct amperage. No actual
+  reference current supplied. Fixed source/pin guard; UI calibration adapted
+  to XSFC multiplicative scale, hardware calibration still pending.
+
+- [x] ESP32-P4: AUX GPIO mode excluded from advertised/accepted modes;
+  GPIO5 startup writes and runtime AUX output disabled only for P4. Stored
+  mode IDs and ESP32/S3 implementation preserved.
+- [x] Dual-core MSP_STATUS_EX extension: versioned XC tail exposes physical
+  core 0/1 measured XSFC work time in 0.1%; legacy aggregate retained.
+  P4 production build passed; hardware values/mode migration not yet validated.
+- [ ] Validate dual-core timing on hardware; these are instrumented work-cycle
+  timings, not complete RTOS/ISR CPU utilization. Stats cross-core sampling
+  is inherited and not a synchronized system-wide profiler.
+
+- [ ] XSFC-configurator: отдельная копия в соседней папке; по уточнению
+  пользователя сохранены исходные формы/вкладки Betaflight, только перекраска
+  и логотип. Замена вкладок урезанными формами отменена. Совместимость каждого
+  поля с API 1.43 и аппаратный save/reboot/read-back ещё требуют проверки;
+  сборка интерфейса не подтверждает поддержку записи настроек.
+
 - [x] Удалена постоянная DShot runtime diagnostics по запросу пользователя:
   TX/RX/packet/missing/invalid counters драйвера, чтение RX hw/words/GPIO
   только для escinfo, сохранение последнего GCR/items и повторная CRC decode.
@@ -294,3 +327,13 @@
   связанные экспериментальные документация и source-level тесты.
   Исходная команда cal gyro и прежнее поведение CLI восстановлены.
   Изменения ICM20948, DLPF и памяти сохранены.
+## Current measurement follow-up (2026-11-01)
+
+- [x] Add read-only `ibatinfo` CLI diagnostics: saved source/pin/scale/offset,
+  last raw sample, estimated ADC millivolts, unfiltered and filtered amps.
+  No additional ADC read or automatic recalibration. ESP32-P4 build passed.
+- [ ] Current accuracy remains unvalidated. User measured ~0.07 V at GPIO21/GND
+  while UI showed approximately 0.9 A; scale100 predicts 0.7 A at that voltage.
+  Readings were approximate, not synchronized. At rest ibatinfo raw/mV/A were zero.
+  No reference current supplied; do not infer required amps from motor heating.
+  Raw-to-volts scaling is approximate and ESC CUR sensitivity remains unknown.

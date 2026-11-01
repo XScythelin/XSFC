@@ -321,6 +321,7 @@ void Actuator::updateLed()
 
 void Actuator::updateGpioOutput()
 {
+#if !defined(ESP32P4)
   static uint8_t gpioPin = 5; // GPIO pin 5 for auxiliary output
   static bool initialized = false;
 
@@ -362,6 +363,7 @@ void Actuator::updateGpioOutput()
       Hal::Gpio::digitalWrite(gpioPin, LOW);
     }
   }
+#endif
 }
 
 }
