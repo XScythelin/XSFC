@@ -3,3 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Local third-party reference checkouts and Python bytecode.
+/reference/
+__pycache__/
+*.py[cod]

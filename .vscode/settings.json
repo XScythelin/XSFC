@@ -1,3 +1,4 @@
 {
-  "python.createEnvironment.trigger": "off"
+  "python.createEnvironment.trigger": "off",
+  "cmake.sourceDirectory": "${workspaceFolder}/reference/inav"
 }
