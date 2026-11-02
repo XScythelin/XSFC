@@ -324,11 +324,14 @@ void Fusion::madgwickFusion()
 
 void FAST_CODE_ATTR Fusion::mahonyFusion()
 {
+  const float ax = _model.state.accel.adc.x;
+  const float ay = _model.state.accel.adc.y;
+  const float az = _model.state.accel.adc.z;
   if(_model.magActive() && _model.isModeActive(MODE_MAG))
   {
     _mahony.update(
       _model.state.attitude.rate.x, _model.state.attitude.rate.y, _model.state.attitude.rate.z,
-      _model.state.accel.adc.x, _model.state.accel.adc.y, _model.state.accel.adc.z,
+      ax, ay, az,
       _model.state.mag.adc.x,   _model.state.mag.adc.y,   _model.state.mag.adc.z
     );
   }
@@ -336,7 +339,7 @@ void FAST_CODE_ATTR Fusion::mahonyFusion()
   {
     _mahony.update(
       _model.state.attitude.rate.x,  _model.state.attitude.rate.y,  _model.state.attitude.rate.z,
-      _model.state.accel.adc.x, _model.state.accel.adc.y, _model.state.accel.adc.z
+      ax, ay, az
     );
   }
   _model.state.attitude.quaternion = _mahony.getQuaternion();

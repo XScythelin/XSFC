@@ -37,13 +37,15 @@ int Xsfc::begin()
 #endif
 
   _model.begin();       // requires _hardware.begin()
+  // Finish flash/PSRAM setup before motor drivers install their interrupts.
+  _actuator.begin();    // requires _model.begin()
+  _blackbox.begin();
   _mixer.begin();
   _sensor.begin();      // requires _hardware.begin()
   _input.begin();       // requires _serial.begin()
-  _actuator.begin();    // requires _model.begin()
   _controller.begin();
-  _blackbox.begin();    // requires _serial.begin(), _actuator.begin()
   _buzzer.begin();
+
 
   _model.state.buzzer.push(BUZZER_SYSTEM_INIT);
 
@@ -127,7 +129,9 @@ int FAST_CODE_ATTR Xsfc::updateOther()
   switch(e.type)
   {
     case EVENT_GYRO_READ:
-      _sensor.preLoop();
+      // Use the complete producer snapshot, not a vector being rewritten
+      // by the next SPI sample on the other core.
+      _sensor.preLoop(e.gyro, e.accel);
       _controller.update();
       // skip mixer and bb if earlier than half cycle, possible delay in previous iteration, 
       // to keep space to receive dshot erpm frame, but process rest
@@ -140,6 +144,7 @@ int FAST_CODE_ATTR Xsfc::updateOther()
       _sensor.postLoop();
       break;
     case EVENT_ACCEL_READ:
+      _sensor.processAccel(e.accel);
       _sensor.fusion();
       break;
     default:

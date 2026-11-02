@@ -15,6 +15,7 @@
 #include "Utils/Snapshot.hpp"
 #include "Utils/Timer.h"
 #include "Utils/Stats.h"
+#include "Utils/TryStack.hpp"
 #include "Device/SerialDevice.h"
 #include "Connect/Msp.hpp"
 #include "Connect/StatusLed.hpp"
@@ -48,7 +49,7 @@ class SerialPortState
 class BuzzerState
 {
   public:
-    BuzzerState(): idx(0) {}
+    BuzzerState(): beeperMask(0) {}
 
     void play(BuzzerEvent e) // play continously, repeat while condition is true
     {
@@ -58,32 +59,31 @@ class BuzzerState
 
     void push(BuzzerEvent e) // play once
     {
-      if(full()) return;
       if(beeperMask & (1 << (e - 1)))
       {
-        events[idx++] = e;
+        events.push(e);
       }
     }
 
     BuzzerEvent pop()
     {
-      if(empty()) return BUZZER_SILENCE;
-      return events[--idx];
+      BuzzerEvent event = BUZZER_SILENCE;
+      events.pop(event);
+      return event;
     }
 
     bool empty() const
     {
-      return idx == 0;
+      return events.empty();
     }
 
     bool full() const
     {
-      return idx >= BUZZER_MAX_EVENTS;
+      return events.full();
     }
 
     Utils::Timer timer;
-    BuzzerEvent events[BUZZER_MAX_EVENTS];
-    size_t idx;
+    Utils::TryStack<BuzzerEvent, BUZZER_MAX_EVENTS> events;
     int32_t beeperMask;
 };
 

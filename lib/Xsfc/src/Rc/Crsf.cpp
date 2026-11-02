@@ -114,11 +114,14 @@ static inline void fillMessage(const CrsfMessage& frame, Connect::MspMessage& m,
 {
   // Payload structure: [dst, origin, flags, msp_header, msp_data...]
   // Available MSP data (after header) = frame.size - 5 (type,dst,origin,flags,crc) - sizeof(header)
+  if(frame.size < 5 + sizeof(HeaderType)) return;
   const auto * hdr = reinterpret_cast<const HeaderType*>(frame.payload + 3);
+  if(hdr->size > Connect::MSP_BUF_SIZE) return;
   const size_t framePayloadSize = frame.size - 5 - sizeof(HeaderType);
   m.cmd = hdr->cmd;
   m.version = version;
   m.dir = Connect::MSP_TYPE_CMD;
+  m.read = 0;
   m.expected = hdr->size;
   m.append(frame.payload + 3 + sizeof(HeaderType), std::min(framePayloadSize, (size_t)hdr->size)); // skip dst, origin, status and msp header
   if(m.expected == m.received)
@@ -129,6 +132,11 @@ static inline void fillMessage(const CrsfMessage& frame, Connect::MspMessage& m,
 
 int FAST_CODE_ATTR Crsf::decodeMsp(const CrsfMessage& frame, Connect::MspMessage& m, uint8_t& origin)
 {
+  if(frame.size < 5 || frame.size > CRSF_FRAME_SIZE_MAX - 2)
+  {
+    m = Connect::MspMessage();
+    return 0;
+  }
   // 0x7A, 0x7C
   //   CRSF frame which wraps MSP request (‘$M<’ or ‘$X<’)
   //   Supported by Betaflight devices
@@ -188,7 +196,9 @@ int FAST_CODE_ATTR Crsf::decodeMsp(const CrsfMessage& frame, Connect::MspMessage
   else
   {
     // next chunks - continuation of fragmented message
-    if(sequence == ((m.sequence + 1) & CRSF_MSP_STATUS_SEQ_MASK))
+    if(m.expected > 0 && m.expected <= Connect::MSP_BUF_SIZE &&
+       m.received <= m.expected &&
+       sequence == ((m.sequence + 1) & CRSF_MSP_STATUS_SEQ_MASK))
     {
       size_t framePayloadSize = std::min(frame.size - 5, m.expected - m.received); // skip dst, origin, status;
       if(m.received + framePayloadSize <= Connect::MSP_BUF_SIZE)

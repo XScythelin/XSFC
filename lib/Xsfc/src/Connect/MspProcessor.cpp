@@ -711,7 +711,8 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
       r.writeU8(1); // blackboxGetRateNum()); // unused
       r.writeU8(1); // blackboxGetRateDenom());
       r.writeU16(_model.config.blackbox.pDenom);//blackboxGetPRatio()); // p_denom
-      //r.writeU8(_model.config.blackbox.pDenom); // sample_rate
+      // XSFC API 1.43 extension: explicit sample-rate index (0 = full rate).
+      r.writeU8(Blackbox::sampleRateIndex(_model.config.blackbox.pDenom, _model.state.loopTimer.interval));
       //r.writeU32(~_model.config.blackbox.fieldsMask);
       break;
 
@@ -730,6 +731,10 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
             (void)(rateNum + rateDenom);
         }
         _model.config.blackbox.pDenom = pRatio;
+        if(m.remain() >= 1) {
+          const uint8_t sampleRate = m.readU8();
+          if(sampleRate <= 4) _model.config.blackbox.pDenom = sampleRate;
+        }
 
         /*if (m.remain() >= 1) {
             _model.config.blackbox.pDenom = m.readU8();
@@ -1198,6 +1203,17 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
       break;
 
     case MSP_SET_FILTER_CONFIG:
+      // Reject signed-overflow Hz before modifying any fields: negative
+      // stored frequencies silently disable LPFs in FilterConfig::sanitize.
+      {
+        static const uint8_t frequencyOffsets[] = {1, 3, 5, 7, 9, 11, 13, 15, 20, 22, 26, 29, 31, 33, 35};
+        bool invalid = m.remain() < 5;
+        for(const auto offset : frequencyOffsets)
+        {
+          if(m.remain() >= offset + 2 && m.buffer[m.read + offset + 1] >= 0x80) invalid = true;
+        }
+        if(invalid) { r.result = -1; break; }
+      }
       _model.config.gyro.filter.freq = m.readU8();
       _model.config.dterm.filter.freq = m.readU16();
       _model.config.yaw.filter.freq = m.readU16();
@@ -1240,7 +1256,7 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
         _model.config.gyro.rpmFilter.minFreq = m.readU8();  // gyro_rpm_notch_min
       }
       // 1.43+
-      if (m.remain() >= 1) {
+      if (m.remain() >= 2) {
         _model.config.gyro.dynamicFilter.max_freq = m.readU16(); // dyn_notch_max_hz
       }
       _model.reload();
@@ -1403,6 +1419,12 @@ void MspProcessor::processCommand(MspMessage& m, MspResponse& r, Device::SerialD
       for (int i = 0; i < AXIS_COUNT_RPY; i++)
       {
         r.writeU16(lrintf(_model.state.mag.adc[i] * 1090));
+      }
+      // XSFC extension: retain the legacy 18-byte prefix, then provide
+      // gyro at 0.1 deg/s resolution (full +/-2000 deg/s range fits int16).
+      for (int i = 0; i < AXIS_COUNT_RPY; i++)
+      {
+        r.writeU16(lrintf(Utils::toDeg(_model.state.gyro.adc[i]) * 10.f));
       }
       break;
 

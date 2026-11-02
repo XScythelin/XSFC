@@ -23,6 +23,8 @@ class GyroSensor: public BaseSensor
     int begin();
     int read();
     int filter();
+    int filter(const VectorFloat& sample);
+    int filter(const VectorFloat& sample, const VectorInt16& raw);
     void postLoop();
     void rpmFilterUpdate();
     void dynNotchFilterUpdate();

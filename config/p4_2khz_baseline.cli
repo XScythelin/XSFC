@@ -1,0 +1,37 @@
+# Apply deliberately via CLI; no defaults/reset, calibration/pins unchanged.
+# Historical ESP32/S3 software filters, current roll/pitch/yaw PID gains.
+# Save/reboot only after reviewing the complete block. No ARM/motor commands.
+set gyro_rate 2000
+set pid_sync 1
+set mixer_sync 1
+set gyro_lpf_type PT1
+set gyro_lpf_freq 100
+set gyro_lpf2_type PT1
+set gyro_lpf2_freq 213
+set gyro_lpf3_type FO
+set gyro_lpf3_freq 150
+set gyro_dyn_lpf_type PT1
+set gyro_dyn_lpf_min 170
+set gyro_dyn_lpf_max 425
+set accel_lpf_type BIQUAD
+set accel_lpf_freq 15
+set pid_dterm_lpf_type PT1
+set pid_dterm_lpf_freq 128
+set pid_dterm_lpf2_type PT1
+set pid_dterm_lpf2_freq 128
+set pid_dterm_dyn_lpf_type PT1
+set pid_dterm_dyn_lpf_min 60
+set pid_dterm_dyn_lpf_max 145
+set gyro_rpm_harmonics 0
+set pid_roll_p 45
+set pid_roll_i 53
+set pid_roll_d 24
+set pid_roll_f 73
+set pid_pitch_p 44
+set pid_pitch_i 51
+set pid_pitch_d 26
+set pid_pitch_f 61
+set pid_yaw_p 45
+set pid_yaw_i 69
+set pid_yaw_d 0
+set pid_yaw_f 50

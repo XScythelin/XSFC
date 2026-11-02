@@ -540,7 +540,7 @@ struct DebugConfig
 
 struct RpmFilterConfig
 {
-  uint8_t harmonics = 3;
+  uint8_t harmonics = 0; // RPM filtering is opt-in with working ESC telemetry.
   uint8_t minFreq = 100;
   int16_t q = 500;
   uint8_t freqLpf = 150;
@@ -873,7 +873,7 @@ class ModelConfig
     // not classified yet
     int16_t i2cSpeed = 800;
 #if defined(ESP32P4)
-    int8_t loopSync = 2; // SPI gyro 8kHz, PID 4kHz by default; 1 remains selectable.
+    int8_t loopSync = 1; // P4 default gyro/PID/mixer 2kHz.
 #else
     int8_t loopSync = 8; // MPU 1000Hz
 #endif
@@ -885,6 +885,13 @@ class ModelConfig
     int16_t boardAlignment[3] = {0, 0, 0};
     char modelName[MODEL_NAME_LEN + 1];
     NavigationSensorConfig navigation;
+    uint16_t gyroRate = 8000; // Requested polling Hz; capped by sensor and bus.
+    // Appended: do not insert into BlackboxConfig (would shift saved fields).
+#if defined(ESP32P4)
+    uint8_t blackboxFlashMode = 1; // 0 DIRECT, 1 PSRAM; applied at boot.
+#else
+    uint8_t blackboxFlashMode = 0;
+#endif
 
     ModelConfig()
     {
@@ -912,6 +919,31 @@ class ModelConfig
 // only local development settings
 #if !defined(XSFC_REVISION)
       devPreset();
+#endif
+#if defined(ESP32P4)
+      // Validated wiring and latest flight configuration. Calibration remains
+      // board-specific and is deliberately not copied from a flight dump.
+      gyroRate = 2000;
+      gyro.bus = BUS_SPI;
+      gyro.dev = GYRO_ICM42688;
+      // Keep the established ESP32/S3 software-filter baseline. The P4
+      // polling rate does not justify disabling the gyro low-pass filters.
+      gyro.dynamicFilter.count = 3;
+      input.serialRxProvider = SERIALRX_CRSF;
+      input.channel[0].map = 3;
+      input.channel[1].map = 1;
+      input.channel[2].map = 0;
+      input.channel[3].map = 2;
+      pid[FC_PID_ROLL] = {45, 53, 24, 73};
+      pid[FC_PID_PITCH] = {44, 51, 26, 61};
+      pid[FC_PID_YAW] = {45, 69, 0, 50};
+      mixer.yawReverse = true;
+      output.protocol = ESC_PROTOCOL_DSHOT600;
+      output.dshotTelemetry = true;
+      blackbox.dev = BLACKBOX_DEV_FLASH;
+      blackbox.pDenom = 1;
+      conditions[0] = {MODE_ARMED, AXIS_AUX_1, 1800, 2100, 0, 0};
+      conditions[1] = {MODE_ANGLE, AXIS_AUX_1 + 2, 900, 2100, 0, 0};
 #endif
     }
 

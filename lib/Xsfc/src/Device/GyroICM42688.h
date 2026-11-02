@@ -45,9 +45,15 @@ public:
     // Configure ODR while sensors are off, then allow gyro startup to settle.
     if (!_bus->writeByte(_addr, ICM42688_REG_GYRO_CONFIG0, ICM42688_GYRO_2000DPS_8KHZ)) return 0;
     if (!_bus->writeByte(_addr, ICM42688_REG_ACCEL_CONFIG0, ICM42688_ACCEL_16G_8KHZ)) return 0;
+    if(!configureAccelFilters()) return 0;
     if (!_bus->writeByte(_addr, ICM42688_REG_PWR_MGMT0, ICM42688_PWR_GYRO_ACCEL_LN)) return 0;
     delay(45);
 
+    uint8_t actual[3]{};
+    if(_bus->read(_addr, ICM42688_REG_PWR_MGMT0, sizeof(actual), actual) != sizeof(actual) ||
+       actual[0] != ICM42688_PWR_GYRO_ACCEL_LN ||
+       actual[1] != ICM42688_GYRO_2000DPS_8KHZ ||
+       actual[2] != ICM42688_ACCEL_16G_8KHZ) return 0;
     _ready = true;
     return 1;
   }
@@ -111,6 +117,34 @@ public:
   uint32_t lastGoodReadUs() const override { return _lastGoodReadUs; }
 
 private:
+  bool configureAccelFilters()
+  {
+    // DS-000347 sections 5.3/5.5, 14.40/14.41: filter BEFORE the host
+    // takes 500-Hz snapshots of the 8-kHz output. The software LPF is too
+    // late to prevent aliasing. Leave gyro AAF/notch/UI settings unchanged.
+    // Accel AAF 213 Hz: DELT=5, DELTSQR=25, BITSHIFT=10 (table 5.3).
+    bool ok = _bus->writeByte(_addr, 0x76, 2);
+    if(ok) ok = _bus->writeByte(_addr, 0x03, 5 << 1);
+    if(ok) ok = _bus->writeByte(_addr, 0x04, 25);
+    if(ok) ok = _bus->writeByte(_addr, 0x05, 10 << 4);
+    uint8_t aaf[3]{};
+    if(ok) ok = _bus->read(_addr, 0x03, sizeof(aaf), aaf) == sizeof(aaf) &&
+      aaf[0] == (5 << 1) && aaf[1] == 25 && aaf[2] == (10 << 4);
+    // Always attempt to restore Bank0, including failed writes/readback.
+    const bool restored = _bus->writeByte(_addr, 0x76, 0);
+    if(!ok || !restored) return false;
+
+    uint8_t bw = 0, order = 0;
+    if(_bus->readByte(_addr, 0x52, &bw) != 1 ||
+       _bus->readByte(_addr, 0x53, &order) != 1) return false;
+    bw = (bw & 0x0f) | 0x70; // accel UI BW=ODR/40=200 Hz; preserve gyro
+    order = (order & ~0x18) | 0x10; // accel UI 3rd order; preserve DEC2/reserved
+    if(!_bus->writeByte(_addr, 0x52, bw) || !_bus->writeByte(_addr, 0x53, order)) return false;
+    uint8_t actual[2]{};
+    return _bus->read(_addr, 0x52, sizeof(actual), actual) == sizeof(actual) &&
+      actual[0] == bw && actual[1] == order;
+  }
+
   bool _ready = false;
   bool _combinedRequested = false, _accelCached = false;
   VectorInt16 _cachedAccel;

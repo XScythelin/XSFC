@@ -6,6 +6,7 @@
 #include <EscDriver.h>
 #include "Debug_Xsfc.h"
 #include "ModelConfig.h"
+#include "Blackbox/BlackboxRate.hpp"
 #include "ModelState.h"
 #include "Utils/Storage.h"
 #include "Utils/Logger.h"
@@ -107,7 +108,8 @@ class Model
     bool blackboxEnabled() const
     {
       // serial or flash
-      return (config.blackbox.dev == BLACKBOX_DEV_SERIAL || config.blackbox.dev == BLACKBOX_DEV_FLASH) && config.blackbox.pDenom > 0;
+      // sample-rate index 0 means full PID rate, not disabled; device NONE disables logging.
+      return Blackbox::loggingEnabled(config.blackbox.dev);
     }
 
     bool gyroActive() const /* IRAM_ATTR */
@@ -316,7 +318,7 @@ class Model
     uint16_t getRssi() const
     {
       size_t channel = config.input.rssiChannel;
-      if(channel < 4 || channel > state.input.channelCount) return 0;
+      if(channel < 4 || channel > INPUT_CHANNELS || channel > state.input.channelCount) return 0;
       float value = state.input.ch[channel - 1];
       return Utils::clamp(lrintf(Utils::map(value, -1.0f, 1.0f, 0.0f, 1023.0f)), 0l, 1023l);
     }
@@ -423,14 +425,16 @@ class Model
 
 
 
-      // for spi gyro allow full speed mode
+      if(config.gyroRate != 2000 && config.gyroRate != 4000 && config.gyroRate != 8000)
+        config.gyroRate = 8000;
+      // Polling rate is selectable independently of the PID divider.
       if (state.gyro.dev && state.gyro.dev->getBus()->isSPI())
       {
-        state.gyro.rate = Utils::alignToClock(state.gyro.clock, XSFC_GYRO_SPI_RATE_MAX);
+        state.gyro.rate = Utils::alignToClock(state.gyro.clock, std::min((int)config.gyroRate, XSFC_GYRO_SPI_RATE_MAX));
       }
       else
       {
-        state.gyro.rate = Utils::alignToClock(state.gyro.clock, XSFC_GYRO_I2C_RATE_MAX);
+        state.gyro.rate = Utils::alignToClock(state.gyro.clock, std::min((int)config.gyroRate, XSFC_GYRO_I2C_RATE_MAX));
         // first usage
         if(_storageResult == STORAGE_ERR_BAD_MAGIC || _storageResult == STORAGE_ERR_BAD_SIZE || _storageResult == STORAGE_ERR_BAD_VERSION)
         {

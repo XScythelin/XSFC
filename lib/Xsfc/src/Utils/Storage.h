@@ -32,7 +32,7 @@ class Storage
 
   private:
     static constexpr uint8_t EEPROM_MAGIC   = 0xA5;
-    static constexpr uint8_t EEPROM_VERSION = 0x07; // Summer control + navigation only.
+    static constexpr uint8_t EEPROM_VERSION = 0x09; // Appended Blackbox flash mode.
     static constexpr size_t  EEPROM_SIZE    = 2048;
 };
 

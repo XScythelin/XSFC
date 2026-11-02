@@ -22,8 +22,11 @@ class SensorManager
     int begin();
     int read();
     int preLoop();
+  int preLoop(const VectorFloat& sample);
+  int preLoop(const VectorFloat& sample, const VectorInt16& raw);
     int postLoop();
     int fusion();
+    int processAccel(const VectorInt16& sample);
     // main task
     int update();
     // sub task

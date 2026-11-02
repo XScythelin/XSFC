@@ -117,7 +117,9 @@ struct CrsfMessage
   uint8_t addr; // CrsfAddress
   uint8_t size; // counts size after this byte, so it must be the payload size + 2 (type and crc)
   uint8_t type; // CrsfFrameType
-  uint8_t payload[CRSF_PAYLOAD_SIZE_MAX + 1]; // +1 for crc
+  // RX accepts a complete 64-byte frame: addr, size, type, payload, CRC.
+  // CRSF_PAYLOAD_SIZE_MAX is the smaller TX fragmentation budget, not RX capacity.
+  uint8_t payload[CRSF_FRAME_SIZE_MAX - 3]; // payload plus CRC
 
   void prepare(uint8_t t)
   {
@@ -172,6 +174,8 @@ struct CrsfMessage
     return Utils::crc8_dvb_s2(crc, payload, size - 2); // size includes type and crc
   }
 } __attribute__ ((__packed__));
+
+static_assert(sizeof(CrsfMessage) == CRSF_FRAME_SIZE_MAX, "CRSF RX frame must fit the maximum wire length");
 
 class Crsf
 {

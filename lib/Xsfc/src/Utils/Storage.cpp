@@ -34,7 +34,7 @@ StorageResult Storage::load(ModelConfig& config) const
 
   uint8_t version = EEPROM.read(addr++);
   if (version != EEPROM_VERSION && version != 0x01 && version != 0x02 &&
-      version != 0x03 && version != 0x04)
+      version != 0x03 && version != 0x04 && version != 0x07 && version != 0x08)
   {
     return STORAGE_ERR_BAD_VERSION;
   }
@@ -44,20 +44,23 @@ StorageResult Storage::load(ModelConfig& config) const
   size |= EEPROM.read(addr++) << 8;
   constexpr size_t prefixEnd = offsetof(ModelConfig, modelName) + MODEL_NAME_LEN + 1;
   constexpr size_t navigationEnd = offsetof(ModelConfig, navigation) + sizeof(NavigationSensorConfig);
+  constexpr size_t gyroRateEnd = offsetof(ModelConfig, gyroRate) + sizeof(config.gyroRate);
   const auto aligned = [](size_t n) { return (n + alignof(ModelConfig) - 1) / alignof(ModelConfig) * alignof(ModelConfig); };
   // Autumn appended a 6-byte landing config, then a 2-byte polling limit.
   const bool summer = version == 0x01 && size == aligned(prefixEnd);
-  const bool navigation = (version == EEPROM_VERSION || version == 0x02) && size == sizeof(ModelConfig);
+  const bool current = version == EEPROM_VERSION && size == sizeof(ModelConfig);
+  const bool polling = version == 0x08 && size == aligned(gyroRateEnd);
+  const bool navigation = (version == 0x07 || version == 0x02) && size == aligned(navigationEnd);
   const bool autumn3 = version == 0x03 && size == aligned(navigationEnd + 6);
   const bool autumn4 = version == 0x04 && size == aligned(navigationEnd + 8);
-  if (!summer && !navigation && !autumn3 && !autumn4)
+  if (!current && !polling && !summer && !navigation && !autumn3 && !autumn4)
   {
     return STORAGE_ERR_BAD_SIZE;
   }
 
   // Do not copy legacy tail padding onto newly appended navigation fields.
   auto* bytes = reinterpret_cast<uint8_t*>(&config);
-  const size_t copySize = summer ? prefixEnd : navigationEnd;
+  const size_t copySize = current ? sizeof(ModelConfig) : (polling ? gyroRateEnd : (summer ? prefixEnd : navigationEnd));
   for (size_t i = 0; i < copySize; ++i) bytes[i] = EEPROM.read(addr + i);
   if (summer)
   {

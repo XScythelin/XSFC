@@ -1,4 +1,5 @@
 #pragma once
+#include "helper_3dmath.h"
 
 // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#queue
 // https://techtutorialsx.com/2017/08/20/esp32-arduino-freertos-queues/
@@ -19,9 +20,13 @@ class Event
   public:
     Event(): type(EVENT_IDLE) {}
     Event(EventType t): type(t) {}
+    Event(EventType t, const VectorInt16& sample): type(t), accel(sample) {}
+    Event(EventType t, const VectorFloat& sample, const VectorInt16& raw): type(t), accel(raw), gyro(sample) {}
     Event(const Event& e) = default;
   public:
     EventType type;
+    VectorInt16 accel;
+    VectorFloat gyro;
 };
 
 }

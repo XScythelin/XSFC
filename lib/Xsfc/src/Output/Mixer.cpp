@@ -2,6 +2,9 @@
 #include "Mixer.h"
 #include "Output/Mixers.h"
 #include "platform.h"
+#if defined(ESP32P4)
+bool flashfsTakeSaveCompleted();
+#endif
 
 namespace Xsfc {
 
@@ -285,11 +288,15 @@ void FAST_CODE_ATTR Mixer::writeOutput(const MixerConfig& mixer, float * out)
   {
     if(!_model.config.output.channel[i].servo && _model.state.output.us[i] > 1000) beaconSafe = false;
   }
-  if(_motor && _beacon.update(millis(), _model.isModeActive(MODE_BUZZER), beaconSafe))
+  #if defined(ESP32P4)
+  if(::flashfsTakeSaveCompleted()) _beacon.notifySaved();
+  #endif
+  const uint8_t beepTone = _beacon.updateTone(millis(), _model.isModeActive(MODE_BUZZER), beaconSafe);
+  if(_motor && beepTone)
   {
     for(size_t i = 0; i < OUTPUT_CHANNELS; ++i)
     {
-      if(!_model.config.output.channel[i].servo && _motor->pin(i) != -1) _motor->beep(i, 1);
+      if(!_model.config.output.channel[i].servo && _motor->pin(i) != -1) _motor->beep(i, beepTone);
     }
   }
   if(_motor) _motor->apply();

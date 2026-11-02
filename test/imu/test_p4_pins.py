@@ -7,12 +7,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class P4PinsTests(unittest.TestCase):
+    def test_rpm_filter_is_opt_in(self):
+        config = (ROOT / 'lib/Xsfc/src/ModelConfig.h').read_text()
+        self.assertRegex(config, r'struct RpmFilterConfig\s*\{\s*uint8_t harmonics = 0;')
+
     def test_p4_spi_rate_and_pid_defaults(self):
         target = (ROOT / 'lib/Xsfc/src/Target/TargetESP32p4.h').read_text()
         self.assertRegex(target, r'#define\s+XSFC_GYRO_SPI_RATE_MAX\s+8000\b')
         self.assertRegex(target, r'#define\s+XSFC_GYRO_I2C_RATE_MAX\s+2000\b')
         config = (ROOT / 'lib/Xsfc/src/ModelConfig.h').read_text()
-        self.assertRegex(config, r'#if defined\(ESP32P4\)\s+int8_t loopSync = 2;')
+        self.assertRegex(config, r'#if defined\(ESP32P4\)\s+int8_t loopSync = 1;')
+        self.assertIn('gyroRate = 2000;', config)
+        self.assertIn('gyro.bus = BUS_SPI;', config)
+        self.assertIn('output.protocol = ESC_PROTOCOL_DSHOT600;', config)
         self.assertRegex(config, r'#else\s+int8_t loopSync = 8;')
 
     def test_dynamic_filter_enabled_by_default(self):
@@ -31,6 +38,8 @@ class P4PinsTests(unittest.TestCase):
         self.assertEqual(motors, [33, 49, 50, 52])
         self.assertEqual(len(set(motors)), 4)
         self.assertEqual(pins['XSFC_SPI_CS_BARO'], -1)
+        self.assertEqual([pins[n] for n in ('XSFC_SPI_0_SCK', 'XSFC_SPI_0_MOSI',
+                                          'XSFC_SPI_0_MISO', 'XSFC_SPI_CS_GYRO')], [28, 29, 30, 32])
         bus_names = ['XSFC_SPI_0_SCK', 'XSFC_SPI_0_MOSI', 'XSFC_SPI_0_MISO',
                      'XSFC_SPI_CS_GYRO', 'XSFC_SPI_CS_BARO',
                      'XSFC_I2C_0_SDA', 'XSFC_I2C_0_SCL']

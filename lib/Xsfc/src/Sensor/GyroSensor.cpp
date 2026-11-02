@@ -98,11 +98,21 @@ int FAST_CODE_ATTR GyroSensor::read()
 
 int FAST_CODE_ATTR GyroSensor::filter()
 {
+  return filter(_model.state.gyro.sampled);
+}
+
+int FAST_CODE_ATTR GyroSensor::filter(const VectorFloat& sample)
+{
+  return filter(sample, _model.state.gyro.raw);
+}
+
+int FAST_CODE_ATTR GyroSensor::filter(const VectorFloat& sample, const VectorInt16& raw)
+{
   if (!_model.gyroActive()) return 0;
 
   Utils::Stats::Measure measure(_model.state.stats, COUNTER_GYRO_FILTER);
 
-  _model.state.gyro.adc = _model.state.gyro.sampled;
+  _model.state.gyro.adc = sample;
 
   calibrate();
 
@@ -110,7 +120,7 @@ int FAST_CODE_ATTR GyroSensor::filter()
 
   for (size_t i = 0; i < AXIS_COUNT_RPY; ++i)
   {
-    _model.setDebug(DEBUG_GYRO_RAW, i, _model.state.gyro.raw[i]);
+    _model.setDebug(DEBUG_GYRO_RAW, i, raw[i]);
     _model.setDebug(DEBUG_GYRO_SCALED, i, lrintf(Utils::toDeg(_model.state.gyro.scaled[i])));
   }
 

@@ -1,11 +1,95 @@
 # TODO XSFC
 
+## Final upload and publication, Nov 3
+
+- Added Russian rate setup guide `docs/P4_LOOP_RATES_RU.md`: 2/4/8kHz,
+  independent dividers, rollback, actual-rate checks, ESC/Blackbox limitations.
+- Final P4 build and 19 Python checks passed. App-only upload at0x10000;
+  separate verify-flash confirmed matching digest. USB watchdog reset still
+  reports Windows OSError433 after programming/verification, board boots.
+- Before upload board already had gyro_rate4000,pid_sync1,mixer_sync1.
+  Preserved it rather than forcing prior2kHz baseline. All411 settings equal
+  before/after,debugNONE,FLASH/PSRAM. Runtime30s:4982valid/0bad/0timeouts,
+  actual gyro/PID/mixer4kHz,accel500Hz. First subsequent dump timed out,
+  retry succeeded. No settings save, ARM, motor or erase commands.
+- Configurator MSP suite60passed/1optional analysis skipped; production build
+  passed. Local editor changes, reference sources, caches and unreferenced
+  XSFC.ico deliberately excluded from publication.
+
+## Accel ownership / P4 logging (local, hardware-unvalidated)
+
+- [x] P4 CLI `blackbox_flash_mode DIRECT|PSRAM`, persisted in EEPROM v9,
+  applied at boot; default PSRAM. v8 migration retains gyroRate and all prior
+  fields, excludes old tail padding. DIRECT does not allocate PSRAM or use the
+  deferred-save LOAD interlock, but restores synchronous in-flight flash stalls.
+- [ ] Hardware verify both modes, v8 migration, dump/save/reboot and readback.
+- [x] Successful PSRAM save emits DShot BEEP1/2/3, 500ms apart, only with
+  disarmed/stopped motors. No success tone on failure, boot repair or DIRECT.
+  Hardware verify ESC tone support/audibility; no new user parameter.
+
+- [x] Remove the 0.75..1.25g / 100ms Mahony guard at user request.
+- [x] Queue a copy of each raw accel sample; filter/fusion/Blackbox consume
+  processed accel on CPU0. Fixes a concrete raw/filtered shared-vector race.
+  Does not prove all measured 3..7g values came from that race.
+- [x] Stage P4 Blackbox in PSRAM; commit on close only while disarmed and
+  motors stopped, including EOF-close handling. Reads include staged data.
+  Allocation failure disables flash logging rather than using blocking writes.
+  Power loss before commit loses the current recording. Commit can take seconds.
+- [x] Extend CLI registry: receiver thresholds/provider, masks, all PID slots,
+  all filter components, telemetry; fix unsigned16 printing and Param copying.
+- [ ] Hardware verify accel at rest/motor vibration and active-log timing;
+  confirm save/download/reboot, full-storage behavior and dump/restore parity.
+- [x] Pending flash save blocks arming via LOAD; failed commit keeps interlock.
+  Hardware verify interlock/readback; do not unplug before commit finishes.
+
+## 2026-11-02 flight-log findings
+
+- [x] Parse both supplied logs without invalid frames; see FLIGHT_LOG_ANALYSIS_20261102.md.
+- [x] Confirm invalid signed D-term Hz disable LPFs; add MSP/UI overflow guards.
+  Existing bad settings are not automatically repaired; source not reproduced.
+- [x] Add missing CLI serialrx_provider for future dump round-trips.
+- [x] XSFC-configurator filenames use XSFC board identity, not BTFL wire variant.
+- [ ] Reproduce ARM OR duplication (supplied dumps/decoder have only one ARM).
+- [ ] Isolate measured PID timing shortfall (3059/3339 vs nominal4000 Hz),
+  including synchronous flash writes; second flight has bidirectional DShot OFF.
+- [ ] Prop-free restore/readback and valid-filter logging tests; no further flight yet.
+
+## Selectable gyro rates and RPM defaults
+
+- [x] Add persisted CLI gyro_rate2000/4000/8000, capped by bus/sensor;
+  pid_sync remains independent divider. Latest P4 default SPI2k/PID2k/mixer2k.
+  Append field with EEPROMv8 migration retaining v7 configuration prefix.
+- [x] RPM filter disabled by default (harmonics0); saved settings unchanged.
+  RMT hardware RX glitch filter is unrelated and retained.
+- [ ] Hardware verify v7 migration, save/reboot/readback and actual2/4/8k
+  gyro/PID combinations. PID8k telemetry limitation remains unresolved.
+
+## Blackbox / PID-configurator regression investigation
+
+- [x] Supplied XSFC.txt is a current/post-reset snapshot: blackbox_dev NONE,
+  DShot telemetry off, gyro SPI pins29/30, PID divider2. It cannot identify
+  the exact pre-reset regression or prove PID/rate corruption.
+- [x] Blackbox rate index0 is full-rate, not disabled; device NONE disables.
+  Add bounded legacy I/P-ratio conversion shared by init and MSP response,
+  explicit sample-index response byte and optional write support for XSFC1.43.
+- [x] Configurator audit: Angle edits incorrectly used PID row3 (ALT) instead
+  of XSFC LEVEL row7; PID tab save lacked required XSFC reboot; D labels
+  implied unsupported D-min/D-max. Fixes local in XSFC-configurator only.
+- [x] P4 build, native Blackbox rate ASan/UBSan test,4 Python checks and
+  13 configurator CPU/MSP tests passed. Actual flash logging/download and
+  PID/Angle save-reboot-readback remain hardware checks, not proven fixed.
+- [ ] Verify selected FLASH device, nonzero flash capacity/free space,
+  start/stop log, download and parse. Flash erase/test commands not run.
+- [ ] Compare before/after config on each PID/Angle/rates edit; no bad-run dump
+  available. Do not assert these confirmed UI defects explain every symptom.
+
 ## multicore_tests — cleanup and SPI preparation
 
 - [x] User reports PID8kHz/mixer4kHz did not improve errors; output frequency
   alone does not explain regression. No verified PID8kHz telemetry fix.
-- [x] P4 defaults: SPI gyro8kHz, pid_sync2/mixer_sync1 => PID/mixer4kHz.
-  PID8kHz remains selectable via pid_sync1; saved settings are not overwritten.
+- [x] P4 defaults updated: SPI gyro2kHz, pid_sync1/mixer_sync1; DShot600
+  bidirectional, latest flight PID/filter values and verified SPI pins.
+  Gyro/PID2/4/8kHz remain selectable; saved settings are not overwritten.
   I2C first-use path retains its existing pid_sync1 behavior at gyro2kHz.
 - [x] Final P4 build and ICM42688 ASan/UBSan test passed, plus4 Python
   checks. Hardware PID4kHz telemetry~1% is user-reported, not flight validation.
@@ -392,3 +476,84 @@
   Readings were approximate, not synchronized. At rest ibatinfo raw/mV/A were zero.
   No reference current supplied; do not infer required amps from motor heating.
   Raw-to-volts scaling is approximate and ESC CUR sensitivity remains unknown.
+# P4 startup recovery (2026-11-02)
+
+## Follow-up at 20:02
+
+### Historical 2 kHz baseline follow-up
+
+### Hardware application and bench verification
+
+### USB diagnosis continued (user reconnected board)
+
+- Added `test/imu/soak_board.py`: read-only, disarmed precondition, preserves complete USB byte stream so panic text is not discarded by MSP parsing.
+- Pre-fix 300-second soak: 49,632 valid IMU replies, zero checksum errors, 3 timeouts; no Guru/panic/ROM/assert markers. Does not resolve the previously observed reboot.
+- Found independent multi-core memory-safety defect: `BuzzerState` used unchecked shared `idx++`/`--idx` across producers on both cores and consumer. Replaced storage with bounded non-waiting `Utils::TryStack`; overlapping notifications may be dropped instead of corrupting shared stack state. Retains LIFO behavior. NOT established as cause of observed panic.
+- Added native two-producer stress test (400,000 push attempts); normal and ASan/UBSan runs passed in WSL. TSan could not run due to runtime unexpected-memory-mapping error; do not count as a pass.
+- P4 build and 17 Python contract tests passed. Flashed application at 0x10000, verified hash; USB re-enumeration error after watchdog reset again, then soak successfully started. No settings/log erase or motor/ARM commands.
+- Post-fix 300-second soak: 50,341 valid IMU replies, zero checksum errors, 4 timeouts; full panic/reboot captured around 164 seconds. Buzzer fix did NOT resolve the rare crash.
+- Matching coredump (ELF SHA prefix `3262a18ad`) places the crash in `Input::filterInputs`, on gyroTask/core1, outside interrupt context. Loop index reached 3484 instead of 16; `_input._model` was corrupted. Task stack had 7824 bytes free; no evidence of stack exhaustion. Originating write remains unknown.
+- Temporary P4 diagnostic firmware installs STORE watchpoints on `input.channelCount` and the first word of `_input` on both cores. A further 300-second read-only soak was launched. Matching ELF/bin preserved as `xsfc-watchpoints-firmware.{elf,bin}` in the approved temporary directory. Remove diagnostic watchpoints before a normal flight build; do not recommend flight while corruption remains unresolved.
+- Flight/motor-load and long-log persistence/tone checks remain unperformed.
+- First watchpoint soak completed: 300 seconds, 49,640 valid replies, zero checksum errors, 3 timeouts; zero Guru/panic/ESP-ROM/assert markers. Reply RTT median/p99/max 0.737/1.208/6.037 ms (not end-to-end sensor latency). Corruption was not reproduced; this is NOT a fix or flight clearance. Started a further 1800-second read-only soak on the same diagnostic build, output prefix `xsfc-soak-watchpoints-30min` in the approved temporary directory; result pending.
+- Continued RC audit: `InputCRSF::parse` accepts 64-byte wire frames but `CrsfMessage` was only 62 bytes (`58+1` payload/CRC bytes plus 3 header bytes). Fixed RX storage to 64 bytes without changing the TX fragmentation budget; added a static assertion and guarded-storage regression for every accepted frame size. Overflow would hit the following channel storage; no evidence yet that it caused the observed `input.channelCount` corruption.
+- Added CRSF/MSP length validation before header reads and subtraction, rejected oversized declared MSP messages, validated continuation state, reset the MSP read cursor on new starts, and added a last-line capacity check to `MspMessage::append`. Reject truncated packed RC channel frames instead of decoding stale payload bytes. Tests `test_crsf_frame.cpp` and `test_crsf_msp_bounds.cpp` passed under ASan/UBSan; P4 build and 17 Python tests passed. These changes are local and NOT flashed while the 1800-second watchpoint soak is active. Matching on-board diagnostic ELF/bin remain preserved separately.
+- ICM42688 review confirms only ODR/range/power registers are explicitly configured; AAF/UI filters remain at reset settings and `setDLPFMode`/`setRate` are no-ops. INAV reference explicitly programs banked AAF coefficients and UI bandwidth. Do not guess equivalent legacy ICM20948 settings or change them during corruption diagnosis; register verification and measured noise/latency comparison still needed.
+- Removed the remaining direct cross-core `DEBUG_GYRO_RAW` read in the gyro filtering path: `Xsfc::updateOther` now passes both processed-input and raw snapshots from the same queued event through SensorManager to GyroSensor. Single-core/no-argument paths retain existing behavior. Extended event-copy regression to cover both gyro vectors; ASan/UBSan test and P4 build passed. Not flashed while the existing diagnostic soak owns COM26. This addresses sample consistency, not the unproven origin of RC memory corruption.
+- The 1800-second watchpoint soak completed: 297,707 valid replies, zero checksum errors, 13 timeouts, no panic/ROM/assert markers reported. Initial/final status identical. No corruption reproduced; NOT proof of root-cause resolution.
+- Subsequently flashed prepared CRSF/MSP bounds and raw gyro snapshot changes at application offset 0x10000, hash verified. Watchdog reset again produced the known USB re-enumeration exception after verification; application boot confirmed by a 60-second probe: 9,967 valid replies, zero checksum errors/timeouts, no panic markers. No ARM/motor/settings/log-erase commands. Temporary watchpoints still installed; remains a diagnostic, not flight-cleared build. Matching ELF/bin saved as `xsfc-crsf-snapshot-firmware.{elf,bin}` in the approved temporary directory. No further long soak launched automatically.
+- Added `TimingProbe` (single-writer atomic CLI-readable lifetime maxima), gyro/PID interval probes, completed-read-to-dequeue age and coalesced timer notification count. New `stats` fields explicitly exclude SPI acquisition and sensor/UI latency. Added wraparound regression; ASan/UBSan passed. P4 build passed (initial private-access compile error corrected via public recording method); application flashed/hash verified, matching artifacts saved as `xsfc-timing-firmware.{elf,bin}`. Watchpoints retained.
+- Timing build first 60-second probe: 9,918 valid replies, zero errors/timeouts. Separate CLI stats read had only ~15,654 intervals since startup; do NOT attribute its maxima to that entire preceding soak. Added `soak_board.py --stats` to capture stats within the same USB connection before CLI exit/reboot.
+- Continuous 60-second probe with end-of-run stats: 9,898 valid replies, zero checksum errors, one timeout, no panic/ROM/assert markers. Lifetime counts ~206,430 gyro/PID intervals; gyro max 513 us, PID max 521 us, completed-read-to-dequeue max 22 us, coalesced ticks 0; CPU360MHz, gyro/PID/mixer2kHz, accel500Hz. These are observed disarmed USB maxima, NOT flight/flash-save worst-case bounds. CLI exit reboots without saving. No new long soak running.
+- Added cached startup register diagnostics to ICM42688 (bank switching ONLY before sampling; bank0 restored), and verify power/ODR/range readback before marking ready. Board registers: bank0 4E/4F/50/51/52 = `0F 03 03 16 11`; bank1 0B..0E = `A0 0D AA 80`; bank2 03 = `30`. Gyro AAF coefficients 13/170/8 correspond to ~585Hz in the datasheet table; hardware filtering is NOT disabled. No filter/ODR retuning performed. Readback failure regression and existing driver tests pass ASan/UBSan.
+- Incremental post-disarm PSRAM commit now verifies each 512-byte write by raw partition readback/memcmp before advancing; journal still follows data, verification failure leaves save pending/failed and suppresses success. P4 build and 17 Python contract tests pass (snapshot contract updated for timestamped event and paired raw snapshot). Physical long-save/EOF/persistence/tone still UNTESTED; USB probe cannot exercise this path without recording.
+- Latest application flashed/hash verified, artifacts `xsfc-verified-save-firmware.{elf,bin}` preserved. 15-second USB probe: 2,490 valid replies, zero errors/timeouts/panic markers; observed gyro/PID interval maxima 513/524us, dequeue age23us, coalesced ticks0. Watchpoints remain; rare corruption root cause unresolved. No ARM/motor/log erase/settings save. No background soak running.
+- Added native `test_flashfs_persistence.cpp` compiling the ACTUAL production `BlackboxFlashfs.cpp` with isolated host-only partition/PSRAM stubs under `test/imu/flashfs_stubs`. NOR model uses bitwise-AND programming (cannot restore 0 to 1 without erase). ASan/UBSan passed: >2MiB patterned log and bytewise persistence verification, <=512-byte/one-write-per-service bound, no flash writes while simulated flight active, data-before-journal ordering, append second log without modifying first, full data-partition EOF and restart, all32 journal slots and extra-write rejection, write failure and readback mismatch retain pending/failed state and suppress completion. Erases in this test affect ONLY the host vector, never hardware. Does not cover physical cache-off timing/watchdogs, actual BBL framing/encoder, power loss, or audible ESC completion. No firmware changes/flash needed for this host-only test; board remains on verified-save diagnostic build.
+- User requested a stopping point and removal of temporary runtime instrumentation. Removed both-core watchpoints, TimingProbe/atomic timing counters and recording calls, gyro event timestamp, register diagnostic virtual API/cache/bank reads/CLI output. Removed unused timing-only header/test. Kept minimal 3-byte IMU startup readback, immutable sample queues, memory fixes and post-disarm flash verification as production safeguards. Host tests remain outside firmware.
+- Added production RC bounds: clamp device channel count at begin; invalid runtime count marks input invalid and enters stage2 failsafe; bound channel loops, setInput/getFailsafeValue, CRSF copy length, RSSI access; initialize temporary channel array and reject invalid remaps. These prevent the observed OOB cascade but do NOT establish the originating corruption writer. No claim of root cause solved.
+- Clean-runtime P4 build and 19 Python tests passed; ICM42688 native ASan/UBSan test passed. Application flashed at0x10000/hash verified, `xsfc-clean-firmware.{elf,bin}` saved in approved temp directory. 60-second USB probe: 9,970 valid replies, zero errors/timeouts/panic markers; gyro/PID2000Hz, mixer~1997..2000Hz, accel~500Hz. Reported average CPU load12.1% versus ~15% instrumented (different runs, not a controlled benchmark). No background test running.
+- Fresh read-only backup `xsfc-clean-settings.txt` has411 settings. Compared to old `xsfc-final-baseline-20261102.txt`, observed accel offsets -48/-439/-56 -> -44/-496/-53, DShot telemetry1->0, Blackbox NONE->FLASH. Not modified or reverted by this cleanup; preserve as potentially user-origin changes. Do not assume bidirectional telemetry currently enabled. No settings save/defaults/ARM/motor/log erase performed.
+- Stopping point: runtime instrumentation removed, clean-runtime USB smoke test passed. NOT flight clearance: prior rare memory-corruption source remains unproven, clean build only short-tested, real receiver/failsafe, motor-load, long flash save/cache/watchdog/ESC tone and new BBL flight behavior remain unverified. Recommend prop-free validation before any airborne trial.
+- Latest flight `XSFC_BLACKBOX_LOG_20261102_223921.BBL` analyzed; see final section of `FLIGHT_LOG_ANALYSIS_20261102.md`. Exactly2kHz overall/27,031 valid frames/zero invalid, but t2..26s processed accel norm median3.265g/p95 6.170g/max11.844g. Sub50Hz power dominates, stationary ends ~1g. Queue fix did not eliminate loaded accel issue. Header acc_lpf_hz1500 is existing Hz*100 encoding, NOT active1500Hz; fresh read-only411-setting dump confirms BIQUAD15 and unchanged calibration/trims. USB100-sample read-only MSP probe gives ~1g/nearzero gyro, RC centers1500; physical level/transmitter validity unknown. No tuning, firmware flash, save/calibration/ARM/motors/log erase. Driver samples accel snapshots at500Hz from8kHz ODR before software LPF and leaves AAF/UI reset defaults; aliasing/loaded data integrity are hypotheses, not proven root cause. Rare corruption remains unresolved.
+- Following user approval, ICM42688 accel hardware filtering now explicitly configured at startup: AAF213Hz (Bank2 03/04/05=0A/19/A0), UI ODR/40=200Hz and3rd order (Bank0 52 high nibble7,53 bits4:3=2). TDK DS-000347 rev1.9 downloaded/extracted in approved temp directory; verified coefficients §5.3 and UI fields §14.40/14.41. Gyro nibble/DEC2/reserved bits preserved, gyro filters unchanged. All modified values read back; failed Bank2 path attempts Bank0 restore. No added runtime sampling/probes or magnitude guards; ODR8kHz/combined reads/software LPF15/PID/fusion/calibration unchanged. This addresses inadequate pre-host-decimation filtering, NOT proof of flight root cause solved.
+- Updated bank-aware fake-bus driver tests pass ASan/UBSan: coefficients/UI fields, fail/dropped writes for each AAF register, Bank0 restoration, gyro/DEC2 preservation, existing combined-read/error/address tests. P4 build and19 Python tests passed. App only flashed0x10000/hash verified, new `xsfc-accel-aaf-firmware.{elf,bin}` saved alongside prior clean firmware. New BIN SHA256=15728a5c992f7354cb9387c95e61a1237dbdc134c7f1f25d4be95492f48a777a. Incremental build retains old CLI compile date22:31:57; distinguish via hash, NOT date.
+- New-board USB60s:9905 valid/0bad/1timeout, average CPU12.2%, gyro/PID2kHz/accel500Hz. Separate400/400 valid IMU reads, RTT median1.74ms/max2.77ms; stationary accel median[5,20,2048],gyro[0,0,0]. Initial immediately reopened backup got empty MSP reply; retry succeeded. Before/after411 settings exactly equal. No settings save, ARM, motor commands, calibration or log erase. No loaded verification or new flight yet; rare memory corruption remains unproven. See docs/ICM42688.md for filter details/limits.
+- New user flight23:05:39 after accel AAF/UI change: user reports best flight, initial vertical/level takeoff. Parsed39,700 valid/0invalid frames,39.699s/exact2kHz/log-end valid. t2..38s norm median1.036g/p95 1.670g/max2.366g vs prior t2..26s3.265/6.170/11.844g; horizontalRMS2.779->0.367g(7.57x lower), meanXYZ near[0,0,1]g; absolute pitchRCmean128.59->21.86. New t2..6s pitch nearly centered(absmean0.0385); later corrections grow but multi-g issue does not return. Final landing-section peak6.62g, not steady-flight maximum. Strong observed improvement, uncontrolled trajectories; residual accel fluctuations/horizon and rare corruption not solved. Detailed comparison in FLIGHT_LOG_ANALYSIS_20261102.md. No tuning/settings/flash/board operations for this analysis. Preserve working firmware; future attitude-debug recording can discriminate residual horizon behavior, do not add always-on instrumentation.
+- User approved attitude-debug preparation. On COM26 checked disarmed, backed up411 settings to `xsfc-before-attitude-debug-settings.txt`, explicitly set ONLY `debug_mode AC_CORRECTION`, verified debug logging1/PSRAM, saved (CLI confirmed Saved), rebooted and obtained411-setting `xsfc-after-attitude-debug-settings.txt`. Diff: debug NONE->AC_CORRECTION and gyro_offset_z7->8; latter is automatic Model::preSave() copying current runtime gyro bias (not an explicit calibration/offset command). No other differences. Firmware unchanged, no ARM/motors/log erase. Existing Fusion debug[0..2] = estimated roll/pitch/yaw in0.1deg; debugNONE can be restored after diagnosis. This selectable debug adds3 conversions per fusion update and log payload, NOT zero overhead; no watchpoints/probes reinstated. Next BBL needed to verify actual debug fields and residual horizon; physical attitude remains unknown without user observation.
+- Flight23:15:01 decoded32,025 valid/0invalid frames/32.024s/exact2kHz; AC_CORRECTION Euler present. t2..30s accel norm median1.090g/p95 1.699g/max2.589g,horizontalRMS0.450g. CenteredRP subset median estimated angles[-0.2,-0.2]deg, abs95[2.7,4.0] including transients. Feedback sign opposes estimated angle in>99.7% zeroRC/nonzeroangle samples; median gain4.444/s. Multiple centered ~1s segments return estimated pitch/roll nearzero (pitch-9.2->-0.9deg t8.085..9.119s). This verifies control against estimated attitude, NOT physical horizon accuracy/position hold. Detailed analysis in flight document. No board/settings changes; awaiting pilot observation of remaining behavior before tuning.
+- Following intermittent forward-horizon report: audited Mahony timestep500Hz/rad-s input/accel event fusion ownership, no simple rate/unit mismatch found. Added offline analyze_attitude.py reconstructing approximate Pcorrection and Euler-rate gyro integral; t10..12s pitch delta-minus-gyro~4.40deg, mean reconstructed Pcorrection~2.04deg/s, consistent with substantial accel correction (not proof of wrong physical attitude). No magnitude guards/gain/LPF/PID/trim changes.
+- Found independent helper_3dmath invSqrt strict-aliasing/long-width bug: nativeLP64 ASan catches8byte read from4byte float. Fixed via uint32_t+memcpy with unchanged positive-input32bit results. ESP32 long32bit: NOT established cause of P4 rare corruption/drift. Actual Mahony host test added (inverse sqrt accuracy/equivalence,30deg integration,+/-20deg convergence at500/1000/2000Hz),-O2 ASan/UBSan passes. P4 build+19 Python tests pass. NOT FLASHED; board remains best-flight accel AAF firmware with AC_CORRECTION. No hardware/settings operations during this audit.
+- Completed actual-code Mahony offline replay of23:15 log,16,013 rows, ASan/UBSan pass. Approximate startup/PT1/gyro-decimation/log-phase; baseline estimatedEuler match RMSroll0.207/pitch0.512deg,peak0.441/1.026deg. LowerP/gyro-only alter estimate but no groundtruth means not demonstrably better; do NOT tune based on closeness/deviation. Production synthetic test confirms0.1g sustained horizontal accel can cause~6deg apparent pitch with zero real rotation, returns after clean accel. This is inherent ambiguity, not implementation defect. Tools: prepare_mahony_replay.py/replay_mahony.cpp. Full results in flight document. No firmware/settings/board operations. Independent known-level prop-free orientation measurements now needed to distinguish static frame/math mismatch from loaded acceleration effects; another same-channel flight alone cannot settle it.
+- User-assisted prop-free static checks completed via read-only MSP/capture_attitude.py (disarmed each sample): initialRP0.0/-0.1deg; held nose-down-0.1/+25.3, return+0.1/+0.1; nose-up+0.2/-16.6,return0.0/-0.1; rightroll+15.2/-0.5,return+0.3/0.0; leftroll-8.3/-0.5,finalreturn-0.2/-0.1. Held accel agrees, gyro~zero. One emptyMSP reply after nose-up, retry passed. No gross static axis/sign error or multi-degree settled offset reproduced. Angles not independently measured; disconnected sequential captures do NOT validate dynamic recovery/yaw coupling or loaded behavior. No flash/settings/calibration/ARM/motors/log erase. Evidence and limitations in flight document; board remains accelAAF firmware+AC_CORRECTION.
+- Continuous prop-free capture v2 completed6645samples/180s/0MSPgaps/maxdt39.1ms, same USB connection. User tilted almost90deg rather than15..25; Euler coupling nearvertical is not by itself failure. All4returns nearbaseline, final10s RPmedian[0.1,-0.2]deg; stationary-level runs initially up to~1.1deg transient then settled. No persistent horizon shift reproduced unloaded. See flight document. No board settings/flash/motors. Initial capture aborted/lost samples on missingMSP; script now streams/flushed JSONL, finally saves JSON, same-connection framing recovery and5consecutive-failure stop, disarmed each sample. No independent motor-loaded attitude reference; cannot infer flight fixed.
+- Nov3 user requested flight-runtime cleanup, explicitly keep Blackbox. Set debug_modeNONE (disable Euler conversions/debug payload), retained FLASH+PSRAM. Verified disarmed and backed up411settings before/after. Removed unconditional micros() call in Blackbox update (now only DEBUG_PIDLOOP). Previously removed watchpoints/timing probes remain absent. Kept selectable debug APIs/host tests (inactive or not linked), production stats, RC bounds, IMU startup readback/AAF and verified Blackbox save/interlock. Included previously host-tested invSqrt uint32/memcpy UB fix with same intended32bit math; no fusion/PID/filter retuning.
+- P4 build+19 Python tests passed; app flashed0x10000/hash verified; artifacts xsfc-flight-cleanup-firmware.{elf,bin} saved alongside best-flight fallback. USB30s4975valid/0bad/0timeouts/no panic,gyro/PID2kHz/accel500Hz. Postreboot dump411settings: debugAC_CORRECTION->NONE; gyro_offsetsXYZ(-4,-7,8)->(-6,6,-3) automatically captured by Model::preSave current runtime bias, no explicit offset/calibration command. All other settings equal, including FLASH/PSRAM,PID,accel calibration/filters. No ARM/motors/log erase. Initial script equality check rejected CRLF normalization mismatch before save; fixed parsing and retried. No background capture running. Flight horizon issue/rare corruption remain unproven; cleanup is not safety clearance.
+
+- User authorized flashing/applying/checking. Backed up live `dump all` and raw NVS 0x9000/0x5000 to `C:/Users/Scythelin/AppData/Local/Temp/opencode/xsfc-before-baseline-20261102.txt` and `xsfc-nvs-before-baseline-20261102.bin`.
+- Flashed current `.pio/build/esp32p4/firmware.bin` at 0x10000 only; esptool verified hash. Final USB reset reported re-enumeration error, but application subsequently responded and ran normally. No log erase, ARM, motor commands or calibration command sent.
+- Applied baseline CLI, verified every requested field in live dump, saved, rebooted and re-read. Actual configuration changes: gyro LPF1 0->100, LPF2 0->213, dynamic LPF 0/0->170/425. Existing rates/PIDs/other baseline fields already matched. Gyro offsets x/y changed by 1 stored unit during automatic startup calibration; accel calibration/pins/PIDs preserved.
+- First 400 RAW_IMU replies: all valid 24-byte payloads, median/p99/max RTT 1.738/2.066/2.779 ms. Stationary accel norm min/mean/max 1.00197/1.00313/1.00491 g; gyro +/-0.1 deg/s. Repeat 400/400 valid. Not an end-to-end motion/UI latency test.
+- Live stats: gyro read/filter and PID 2000 Hz; mixer output about 1997..2000 Hz; accel/fusion about 500 Hz; IMU read errors 0. These are window averages, not worst-case loop jitter measurements.
+- IMPORTANT: one 30-second stress run observed panic handler re-entry and a reboot around 12 seconds. Captured tail in `xsfc-baseline-sustained-20261102.json`. Not explained/resolved. Subsequent 90-second run had 7500 valid replies/no failures. Later 120-second run had 11061 valid replies and one empty-header timeout, no observed reboot (uptime 206.9 s). Do NOT call this flight-ready.
+- Read coredump partition to `xsfc-p4-coredump-20261102.bin`; decoder rejects application SHA (dump fc482171b vs current ELF 160dfd47b), so this is not evidence for the latest panic's cause. No partition erased.
+- Final verified settings dump `xsfc-final-baseline-20261102.txt`. Logs report used=0; assistant did not erase them. Long-save/tone and loaded motor/flight behavior remain untested.
+
+- Reference is commit `1924668`, OLD ICM20948 driver, not the rewritten driver. Old driver kept hardware DLPF enabled; a 2 kHz control/polling setting is not proof of 2 kHz unique IMU samples.
+- Removed P4-specific overrides disabling gyro LPF1/LPF2/dynamic LPF. Added `config/p4_2khz_baseline.cli` containing only explicit `set` commands, historical software filters and supplied current PID gains. Does not reset calibration/pins or save automatically; NOT applied to hardware.
+- Baseline CLI registry/non-destructive contract and historical gyro-default checks added. All 17 Python source-contract tests pass. Latest P4 build passes (firmware.bin and merged image rebuilt).
+- Latest hardware probe: COM26 absent; `python -m serial.tools.list_ports` reports no ports. No live timing/configuration/IMU measurements possible in this state. No flash or configuration write performed.
+- Still inspect/measure consumer queue backlog, timer-notification coalescing, shared loop/mixer timer state and ICM42688 hardware anti-alias filtering. None is established as the cause of the reported flight regression yet.
+
+- Read XSFC_cli_20261102_200203.txt. Referenced XSFC_BLACKBOX_LOG_20261102_200011.BBL is absent from Downloads at analysis time; no new-flight measurements available.
+- Changed post-disarm commit to one 512-byte write per service call, preserving data-before-journal ordering and arming interlock. Long-recording persistence and completion tone remain hardware-unverified.
+- Queued gyro sampled-vector snapshots now feed consumer filtering; consumer no longer reads the concurrently rewritten sampled vector. Raw gyro debug still reads shared producer state and needs separate cleanup.
+- Existing `flash erase` CLI command now refuses armed/motor-test use and describes log-only erase. It was NOT executed.
+- P4 build passed using C:/.platformio/penv/Scripts/python.exe; Python contract tests 15 passed. System Python PlatformIO failed with `No platform named win32`; use the PlatformIO virtualenv.
+- These follow-up changes are not flashed. Lateral drift, accelerometer vibration/scaling, combined-read hardware coherence and motor noise remain unresolved; do not label flight-fixed.
+
+- Confirmed regression: eager 0xBE0000-byte flash-to-PSRAM startup copy caused repeated HP watchdog resets before the gyro timer/MSP processing started. Internal bounce buffers and mapped bulk copying did not resolve it; exact low-level cache/panic cause remains unconfirmed.
+- Removed the eager copy. Existing flash data is mapped read-only, with dirty data/journal ranges overlaid from PSRAM. Only new writes touch staging memory.
+- PID consumer waits for initialization completion. Blackbox setup precedes motor-output interrupt installation.
+- Flashed application only at 0x10000, hash verified; no NVS/log partition erase requested. Removed temporary ROM diagnostics.
+- Hardware verified final image: API 1.43, BTFL variant, XSFC/ESP32P4 identity, status, raw IMU and dataflash summary respond; 60/60 API replies over 15 seconds. Python source-contract suite: 13 passed.
+- Still pending: actual PSRAM flight recording/commit/readback, completion tone, DIRECT mode, dump/restore parity, timing/accel flight validation. Startup recovery does not establish flight safety or validate PSRAM writes under sustained load.

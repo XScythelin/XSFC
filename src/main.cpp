@@ -110,6 +110,9 @@ Xsfc::Xsfc xsfc;
     void gyroTask(void *pvParameters)
     {
       xsfc.begin();
+      // The consumer must not touch queues/state while begin() initializes
+      // devices and performs cross-core flash/cache operations.
+      xTaskNotifyGive(pidTaskHandle);
       gyroTimerInit(gyroTimerIsr, xsfc.getGyroInterval());
       while(true)
       {
@@ -120,6 +123,7 @@ Xsfc::Xsfc xsfc;
 
     void pidTask(void *pvParameters)
     {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
       while(true)
       {
         xsfc.updateOther();
@@ -146,8 +150,8 @@ Xsfc::Xsfc xsfc;
       // PRO(0): hi-res timer(22), timer(1), event-loop(20), lwip(18/any), wifi(23), wpa(2/any), BT/vhci(23), NimBle(21), BT/other(19,20,22), Eth(15), Mqtt(5/any)
       // APP(1): free
       xsfc.load();
-      xTaskCreateUniversal(gyroTask, "gyroTask", 8192, NULL, 24, &gyroTaskHandle, 1);
       xTaskCreateUniversal(pidTask,  "pidTask",  8192, NULL,  1, &pidTaskHandle,  0);
+      xTaskCreateUniversal(gyroTask, "gyroTask", 8192, NULL, 24, &gyroTaskHandle, 1);
       vTaskDelete(NULL); // delete arduino loop task
     }
 

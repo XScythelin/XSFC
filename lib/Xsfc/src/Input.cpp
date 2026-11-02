@@ -10,7 +10,7 @@ Input::Input(Model& model, TelemetryManager& telemetry): _model(model), _telemet
 int Input::begin()
 {
   _device = getInputDevice();
-  _model.state.input.channelCount = _device ? _device->getChannelCount() : INPUT_CHANNELS;
+  _model.state.input.channelCount = std::min(_device ? _device->getChannelCount() : INPUT_CHANNELS, INPUT_CHANNELS);
   _model.state.input.frameDelta = FRAME_TIME_DEFAULT_US;
   _model.state.input.frameRate = 1000000ul / _model.state.input.frameDelta;
   _model.state.input.frameCount = 0;
@@ -45,6 +45,7 @@ int Input::begin()
 
 int16_t FAST_CODE_ATTR Input::getFailsafeValue(uint8_t c)
 {
+  if(c >= INPUT_CHANNELS) return PWM_RANGE_MID;
   const InputChannelConfig& ich = _model.config.input.channel[c];
   switch(ich.fsMode)
   {
@@ -61,6 +62,7 @@ int16_t FAST_CODE_ATTR Input::getFailsafeValue(uint8_t c)
 
 void FAST_CODE_ATTR Input::setInput(Axis i, float v, bool newFrame, bool noFilter)
 {
+  if(static_cast<size_t>(i) >= INPUT_CHANNELS) return;
   const InputChannelConfig& ich = _model.config.input.channel[i];
   if(i <= AXIS_THRUST)
   {
@@ -78,6 +80,14 @@ void FAST_CODE_ATTR Input::setInput(Axis i, float v, bool newFrame, bool noFilte
 int FAST_CODE_ATTR Input::update()
 {
   if(!_device) return 0;
+  // Fail closed if runtime channel metadata is damaged. Do not let a bad
+  // count turn one corruption into thousands of out-of-bounds RC writes.
+  if(_model.state.input.channelCount == 0 || _model.state.input.channelCount > INPUT_CHANNELS)
+  {
+    _model.state.input.channelsValid = false;
+    failsafeStage2();
+    return 0;
+  }
 
   uint32_t startTime = micros();
 
@@ -135,15 +145,23 @@ void FAST_CODE_ATTR Input::processInputs()
 
   uint32_t startTime = micros();
 
-  uint16_t channels[INPUT_CHANNELS];
-  _device->get(channels, _model.state.input.channelCount);
+  uint16_t channels[INPUT_CHANNELS]{};
+  const size_t channelCount = std::min(_model.state.input.channelCount, INPUT_CHANNELS);
+  _device->get(channels, channelCount);
 
   _model.state.input.channelsValid = true;
-  for(size_t c = 0; c < _model.state.input.channelCount; c++)
+  for(size_t c = 0; c < channelCount; c++)
   {
     const InputChannelConfig& ich = _model.config.input.channel[c];
 
     // remap channels
+    if(static_cast<size_t>(ich.map) >= _model.state.input.channelCount)
+    {
+      _model.state.input.channelsValid = false;
+      _model.state.input.bufferPrevious[c] = _model.state.input.buffer[c];
+      _model.state.input.buffer[c] = getFailsafeValue(c);
+      continue;
+    }
     int16_t v = _model.state.input.raw[c] = (int16_t)channels[ich.map];
 
     // adj midrc
@@ -231,7 +249,7 @@ void FAST_CODE_ATTR Input::failsafeStage1()
 {
   _model.state.failsafe.phase = FC_FAILSAFE_RX_LOSS_DETECTED;
   _model.state.input.rxLoss = true;
-  for(size_t i = 0; i < _model.state.input.channelCount; i++)
+  for(size_t i = 0; i < std::min(_model.state.input.channelCount, INPUT_CHANNELS); i++)
   {
     setInput((Axis)i, getFailsafeValue(i), true, true);
   }
@@ -276,7 +294,7 @@ void FAST_CODE_ATTR Input::filterInputs(InputStatus status)
     _model.state.input.overrideActive = false;  
   }  
   
-  for(size_t c = 0; c < _model.state.input.channelCount; c++)  
+  for(size_t c = 0; c < std::min(_model.state.input.channelCount, INPUT_CHANNELS); c++)
   {  
     float v = _model.state.input.buffer[c];  
     if(c <= AXIS_THRUST)  

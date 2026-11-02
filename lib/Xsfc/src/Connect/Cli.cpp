@@ -49,6 +49,9 @@ void Cli::Param::print(Stream& stream) const
     case PARAM_SHORT:
       print(stream, *reinterpret_cast<int16_t*>(addr));
       break;
+    case PARAM_SHORT_U:
+      print(stream, *reinterpret_cast<uint16_t*>(addr));
+      break;
     case PARAM_INT:
       print(stream, *reinterpret_cast<int32_t*>(addr));
       break;
@@ -197,6 +200,10 @@ void Cli::Param::update(const char ** args) const
     case PARAM_SHORT:
       if(!v) return;
       write((int16_t)parse(v));
+      break;
+    case PARAM_SHORT_U:
+      if(!v) return;
+      write((uint16_t)parse(v));
       break;
     case PARAM_INT:
       if(!v) return;
@@ -357,6 +364,9 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
   static const char* inputRateTypeChoices[] = { PSTR("BETAFLIGHT"), PSTR("RACEFLIGHT"), PSTR("KISS"), PSTR("ACTUAL"), PSTR("QUICK"), NULL };
   static const char* throtleLimitTypeChoices[] = { PSTR("NONE"), PSTR("SCALE"), PSTR("CLIP"), NULL };
   static const char* inputFilterChoices[] = { PSTR("INTERPOLATION"), PSTR("FILTER"), NULL };
+  static const char* serialRxChoices[] = { PSTR("SPEKTRUM1024"), PSTR("SPEKTRUM2048"), PSTR("SBUS"),
+    PSTR("SUMD"), PSTR("SUMH"), PSTR("XBUS_MODE_B"), PSTR("XBUS_MODE_B_RJ01"), PSTR("IBUS"),
+    PSTR("JETIEXBUS"), PSTR("CRSF"), PSTR("SRXL"), PSTR("TARGET_CUSTOM"), PSTR("FPORT"), NULL };
   static const char* inputItermRelaxChoices[] = { PSTR("OFF"), PSTR("RP"), PSTR("RPY"), PSTR("RP_INC"), PSTR("RPY_INC"), NULL };
   static const char* altHoldThrottleChoices[] = { PSTR("STICK"), PSTR("MID_STICK"), PSTR("HOVER"), NULL };
   static const char* flowDevChoices[] = { PSTR("AUTO"), PSTR("MATEK3901"), PSTR("MTF"), NULL };
@@ -365,10 +375,13 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
   static const char* currentSourceChoices[] = { PSTR("NONE"), PSTR("ADC"), NULL };
   static const char* blackboxDevChoices[] = { PSTR("NONE"), PSTR("FLASH"), PSTR("SD_CARD"), PSTR("SERIAL"), NULL };
   static const char* blackboxModeChoices[] = { PSTR("NORMAL"), PSTR("TEST"), PSTR("ALWAYS"), NULL };
+  static const char* blackboxFlashChoices[] = { PSTR("DIRECT"), PSTR("PSRAM"), NULL };
   static const char* ledTypeChoices[] = { PSTR("SIMPLE"), PSTR("STRIP"), NULL };
 
   size_t i = 0;
   static const Param params[] = {
+
+    Param(PSTR("feature_mask"), &c.featureMask),
 
     Param(PSTR("feature_gps"), &c.featureMask, 7),
     Param(PSTR("feature_rangefinder"), &c.featureMask, 9),
@@ -390,10 +403,16 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("gyro_align"), &c.gyro.align, alignChoices),
     Param(PSTR("gyro_lpf_type"), &c.gyro.filter.type, filterTypeChoices),
     Param(PSTR("gyro_lpf_freq"), &c.gyro.filter.freq),
+    Param(PSTR("gyro_lpf_cutoff"), &c.gyro.filter.cutoff),
     Param(PSTR("gyro_lpf2_type"), &c.gyro.filter2.type, filterTypeChoices),
     Param(PSTR("gyro_lpf2_freq"), &c.gyro.filter2.freq),
+    Param(PSTR("gyro_lpf2_cutoff"), &c.gyro.filter2.cutoff),
     Param(PSTR("gyro_lpf3_type"), &c.gyro.filter3.type, filterTypeChoices),
     Param(PSTR("gyro_lpf3_freq"), &c.gyro.filter3.freq),
+    Param(PSTR("gyro_lpf3_cutoff"), &c.gyro.filter3.cutoff),
+    Param(PSTR("gyro_notch1_type"), &c.gyro.notch1Filter.type, filterTypeChoices),
+    Param(PSTR("gyro_notch2_type"), &c.gyro.notch2Filter.type, filterTypeChoices),
+    Param(PSTR("gyro_dyn_lpf_type"), &c.gyro.dynLpfFilter.type, filterTypeChoices),
     Param(PSTR("gyro_notch1_freq"), &c.gyro.notch1Filter.freq),
     Param(PSTR("gyro_notch1_cutoff"), &c.gyro.notch1Filter.cutoff),
     Param(PSTR("gyro_notch2_freq"), &c.gyro.notch2Filter.freq),
@@ -420,6 +439,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("accel_dev"), &c.accel.dev, gyroDevChoices),
     Param(PSTR("accel_lpf_type"), &c.accel.filter.type, filterTypeChoices),
     Param(PSTR("accel_lpf_freq"), &c.accel.filter.freq),
+    Param(PSTR("accel_lpf_cutoff"), &c.accel.filter.cutoff),
     Param(PSTR("accel_offset_x"), &c.accel.bias[0]),
     Param(PSTR("accel_offset_y"), &c.accel.bias[1]),
     Param(PSTR("accel_offset_z"), &c.accel.bias[2]),
@@ -431,6 +451,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("mag_align"), &c.mag.align, alignChoices),
     Param(PSTR("mag_filter_type"), &c.mag.filter.type, filterTypeChoices),
     Param(PSTR("mag_filter_lpf"), &c.mag.filter.freq),
+    Param(PSTR("mag_filter_cutoff"), &c.mag.filter.cutoff),
     Param(PSTR("mag_offset_x"), &c.mag.offset[0]),
     Param(PSTR("mag_offset_y"), &c.mag.offset[1]),
     Param(PSTR("mag_offset_z"), &c.mag.offset[2]),
@@ -442,12 +463,14 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("baro_dev"), &c.baro.dev, baroDevChoices),
     Param(PSTR("baro_lpf_type"), &c.baro.filter.type, filterTypeChoices),
     Param(PSTR("baro_lpf_freq"), &c.baro.filter.freq),
+    Param(PSTR("baro_lpf_cutoff"), &c.baro.filter.cutoff),
 
     Param(PSTR("rangefinder_bus"), &c.rangefinder.bus, busDevChoices),
     Param(PSTR("rangefinder_dev"), &c.rangefinder.dev, rangefinderDevChoices),
     Param(PSTR("rangefinder_max_range"), &c.rangefinder.maxRange),
     Param(PSTR("rangefinder_lpf_type"), &c.rangefinder.filter.type, filterTypeChoices),
     Param(PSTR("rangefinder_lpf_freq"), &c.rangefinder.filter.freq),
+    Param(PSTR("rangefinder_lpf_cutoff"), &c.rangefinder.filter.cutoff),
 
     Param(PSTR("gps_min_sats"), &c.gps.minSats),
     Param(PSTR("gps_set_home_once"), &c.gps.setHomeOnce),
@@ -480,6 +503,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("fusion_gain_i"), &c.fusion.gainI),
 
     Param(PSTR("input_rate_type"), &c.input.rateType, inputRateTypeChoices),
+    Param(PSTR("serialrx_provider"), &c.input.serialRxProvider, serialRxChoices),
 
     Param(PSTR("input_roll_rate"), &c.input.rate[0]),
     Param(PSTR("input_roll_srate"), &c.input.superRate[0]),
@@ -497,6 +521,9 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("input_yaw_limit"), &c.input.rateLimit[2]),
 
     Param(PSTR("input_deadband"), &c.input.deadband),
+    Param(PSTR("input_ppm_mode"), &c.input.ppmMode),
+    Param(PSTR("input_min_check"), &c.input.minCheck),
+    Param(PSTR("input_max_check"), &c.input.maxCheck),
 
     Param(PSTR("input_min"), &c.input.minRc),
     Param(PSTR("input_mid"), &c.input.midRc),
@@ -508,9 +535,11 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("input_filter_type"), &c.input.filterType, inputFilterChoices),
     Param(PSTR("input_lpf_type"), &c.input.filter.type, filterTypeChoices),
     Param(PSTR("input_lpf_freq"), &c.input.filter.freq),
+    Param(PSTR("input_lpf_cutoff"), &c.input.filter.cutoff),
     Param(PSTR("input_lpf_factor"), &c.input.filterAutoFactor),
     Param(PSTR("input_ff_lpf_type"), &c.input.filterDerivative.type, filterTypeChoices),
     Param(PSTR("input_ff_lpf_freq"), &c.input.filterDerivative.freq),
+    Param(PSTR("input_ff_lpf_cutoff"), &c.input.filterDerivative.cutoff),
 
     Param(PSTR("input_rssi_channel"), &c.input.rssiChannel),
 
@@ -577,6 +606,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("mode_7"), &c.conditions[7]),
 
     Param(PSTR("pid_sync"), &c.loopSync),
+    Param(PSTR("gyro_rate"), &c.gyroRate),
 
     Param(PSTR("pid_roll_p"), &c.pid[FC_PID_ROLL].P),
     Param(PSTR("pid_roll_i"), &c.pid[FC_PID_ROLL].I),
@@ -602,8 +632,16 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("pid_level_rate_limit"), &c.level.rateLimit),
     Param(PSTR("pid_level_lpf_type"), &c.level.ptermFilter.type, filterTypeChoices),
     Param(PSTR("pid_level_lpf_freq"), &c.level.ptermFilter.freq),
+    Param(PSTR("pid_level_lpf_cutoff"), &c.level.ptermFilter.cutoff),
 
     Param(PSTR("pid_mag_p"), &c.pid[FC_PID_MAG].P),
+    Param(PSTR("pid_mag_i"), &c.pid[FC_PID_MAG].I),
+    Param(PSTR("pid_mag_d"), &c.pid[FC_PID_MAG].D),
+    Param(PSTR("pid_mag_f"), &c.pid[FC_PID_MAG].F),
+    Param(PSTR("pid_nav_p"), &c.pid[FC_PID_NAVR].P),
+    Param(PSTR("pid_nav_i"), &c.pid[FC_PID_NAVR].I),
+    Param(PSTR("pid_nav_d"), &c.pid[FC_PID_NAVR].D),
+    Param(PSTR("pid_nav_f"), &c.pid[FC_PID_NAVR].F),
 
     Param(PSTR("pid_althold_pos_p"), &c.pid[FC_PID_ALT].P),
     Param(PSTR("pid_althold_pos_i"), &c.pid[FC_PID_ALT].I),
@@ -627,6 +665,8 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
 
     Param(PSTR("pid_poshold_pos_p"), &c.pid[FC_PID_POS].P),
     Param(PSTR("pid_poshold_pos_i"), &c.pid[FC_PID_POS].I),
+    Param(PSTR("pid_poshold_pos_d"), &c.pid[FC_PID_POS].D),
+    Param(PSTR("pid_poshold_pos_f"), &c.pid[FC_PID_POS].F),
     Param(PSTR("pid_poshold_vel_p"), &c.pid[FC_PID_POSR].P),
     Param(PSTR("pid_poshold_vel_i"), &c.pid[FC_PID_POSR].I),
     Param(PSTR("pid_poshold_vel_d"), &c.pid[FC_PID_POSR].D),
@@ -644,14 +684,20 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("poshold_use_gyro_comp"), &c.posHold.useGyroComp),
     Param(PSTR("poshold_vel_lpf_type"), &c.posHold.velFilter.type, filterTypeChoices),
     Param(PSTR("poshold_vel_lpf_freq"), &c.posHold.velFilter.freq),
+    Param(PSTR("poshold_vel_lpf_cutoff"), &c.posHold.velFilter.cutoff),
 
     Param(PSTR("pid_yaw_lpf_type"), &c.yaw.filter.type, filterTypeChoices),
     Param(PSTR("pid_yaw_lpf_freq"), &c.yaw.filter.freq),
+    Param(PSTR("pid_yaw_lpf_cutoff"), &c.yaw.filter.cutoff),
 
     Param(PSTR("pid_dterm_lpf_type"), &c.dterm.filter.type, filterTypeChoices),
     Param(PSTR("pid_dterm_lpf_freq"), &c.dterm.filter.freq),
+    Param(PSTR("pid_dterm_lpf_cutoff"), &c.dterm.filter.cutoff),
     Param(PSTR("pid_dterm_lpf2_type"), &c.dterm.filter2.type, filterTypeChoices),
     Param(PSTR("pid_dterm_lpf2_freq"), &c.dterm.filter2.freq),
+    Param(PSTR("pid_dterm_lpf2_cutoff"), &c.dterm.filter2.cutoff),
+    Param(PSTR("pid_dterm_notch_type"), &c.dterm.notchFilter.type, filterTypeChoices),
+    Param(PSTR("pid_dterm_dyn_lpf_type"), &c.dterm.dynLpfFilter.type, filterTypeChoices),
     Param(PSTR("pid_dterm_notch_freq"), &c.dterm.notchFilter.freq),
     Param(PSTR("pid_dterm_notch_cutoff"), &c.dterm.notchFilter.cutoff),
     Param(PSTR("pid_dterm_dyn_lpf_min"), &c.dterm.dynLpfFilter.cutoff),
@@ -764,6 +810,7 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
     Param(PSTR("pin_spi_cs_2"), &c.pin[PIN_SPI_CS2]),
 #endif
     Param(PSTR("pin_buzzer_invert"), &c.buzzer.inverted),
+    Param(PSTR("beeper_mask"), &c.buzzer.beeperMask),
     Param(PSTR("pin_led_invert"), &c.led.invert),
     Param(PSTR("pin_led_type"), &c.led.type, ledTypeChoices),
 
@@ -772,12 +819,16 @@ const Cli::Param * Cli::initialize(ModelConfig& c)
 #endif
     Param(PSTR("rescue_config_delay"), &c.rescueConfigDelay),
 
-    //Param(PSTR("telemetry"), &c.telemetry),
+    Param(PSTR("telemetry"), &c.telemetry),
     Param(PSTR("telemetry_interval"), &c.telemetryInterval),
 
     Param(PSTR("blackbox_dev"), &c.blackbox.dev, blackboxDevChoices),
+#if defined(ESP32P4)
+    Param(PSTR("blackbox_flash_mode"), &c.blackboxFlashMode, blackboxFlashChoices),
+#endif
     Param(PSTR("blackbox_mode"), &c.blackbox.mode, blackboxModeChoices),
     Param(PSTR("blackbox_rate"), &c.blackbox.pDenom),
+    Param(PSTR("blackbox_fields_mask"), &c.blackbox.fieldsMask),
     Param(PSTR("blackbox_log_acc"), &c.blackbox.fieldsMask, BLACKBOX_FIELD_ACC),
     Param(PSTR("blackbox_log_alt"), &c.blackbox.fieldsMask, BLACKBOX_FIELD_ALTITUDE),
     Param(PSTR("blackbox_log_bat"), &c.blackbox.fieldsMask, BLACKBOX_FIELD_BATTERY),
@@ -994,6 +1045,29 @@ void Cli::parse(CliCmd& cmd)
   while(pch && count < CLI_ARGS_SIZE)
   {
     cmd.args[count++] = pch;
+    // String values are the remainder of the line, not a single token.
+    // This also preserves spaces in model names and wireless credentials.
+    if(count == 2 && strcmp(cmd.args[0], "set") == 0)
+    {
+      for(const Param* param = _params; param->name; ++param)
+      {
+        if(param->type == PARAM_STRING && strcmp_P(cmd.args[1], param->name) == 0)
+        {
+          char* rest = strtok(NULL, "");
+          if(rest)
+          {
+            while(*rest == ' ' || *rest == '\t') ++rest;
+            if(*rest == '=' && (rest[1] == ' ' || rest[1] == '\t'))
+            {
+              ++rest;
+              while(*rest == ' ' || *rest == '\t') ++rest;
+            }
+          }
+          cmd.args[count] = rest;
+          return;
+        }
+      }
+    }
     pch = strtok(NULL, DELIM);
   }
 }
@@ -1660,8 +1734,13 @@ void Cli::execute(CliCmd& cmd, Stream& s)
     }
     else if(strcmp_P(cmd.args[1], PSTR("erase")) == 0)
     {
+      if(_model.isModeActive(MODE_ARMED) || _model.areMotorsRunning())
+      {
+        s.println(F("ERROR: disarm and stop motors before erasing Blackbox logs"));
+        return;
+      }
       flashfsEraseCompletely();
-      s.println("OK");
+      s.println(flashfsGetOffset() == 0 ? F("OK: Blackbox logs erased; settings preserved") : F("ERROR: Blackbox erase failed"));
     }
     else if(strcmp_P(cmd.args[1], PSTR("test")) == 0)
     {

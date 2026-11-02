@@ -57,6 +57,12 @@ uint32_t MspMessage::readU32()
 
 uint16_t MspMessage::append(const uint8_t * data, size_t len)
 {
+  if(received > MSP_BUF_SIZE || len > MSP_BUF_SIZE - received)
+  {
+    state = MSP_STATE_IDLE;
+    expected = received = read = 0;
+    return 0;
+  }
   std::copy(data, data + len, buffer + received);
   received += len;
   return received;

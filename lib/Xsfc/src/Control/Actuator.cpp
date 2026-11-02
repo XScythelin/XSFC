@@ -3,6 +3,9 @@
 #include "Hal/Gpio.h"
 #include <algorithm>
 #include <cmath>
+#if defined(ESP32P4)
+bool flashfsSavePending();
+#endif
 
 namespace Xsfc::Control {
 
@@ -91,6 +94,9 @@ void Actuator::updateScaler()
 
 void Actuator::updateArmingDisabled()
 {
+#if defined(ESP32P4)
+  _model.setArmingDisabled(ARMING_DISABLED_LOAD, ::flashfsSavePending());
+#endif
   _model.state.i2cErrorDelta = 0;
 
   _model.setArmingDisabled(ARMING_DISABLED_NO_GYRO,        !_model.state.gyro.present);

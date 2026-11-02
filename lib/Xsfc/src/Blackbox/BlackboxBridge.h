@@ -10,3 +10,5 @@ bool blackboxShouldLogIFrame(void);
 }
 
 void initBlackboxModel(Xsfc::Model * m);
+bool blackboxFlightActive();
+void flashfsCommitPending();

@@ -57,6 +57,7 @@ uint16_t FAST_CODE_ATTR InputCRSF::get(uint8_t i) const
 
 void FAST_CODE_ATTR InputCRSF::get(uint16_t * data, size_t len) const
 {
+  len = std::min(len, CHANNELS);
   const uint16_t * src = _channels;
   while(len--)
   {
@@ -158,6 +159,7 @@ void FAST_CODE_ATTR InputCRSF::applyLinkStats(const CrsfMessage& msg)
 
 void FAST_CODE_ATTR InputCRSF::applyChannels(const CrsfMessage& msg)
 {
+  if(msg.size != sizeof(CrsfData) + 2) return;
   const auto * data = reinterpret_cast<const CrsfData*>(msg.payload);
   Crsf::decodeRcDataShift8(_channels, data);
   //Crsf::decodeRcData(_channels, frame);

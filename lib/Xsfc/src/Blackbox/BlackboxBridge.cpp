@@ -7,6 +7,17 @@ void initBlackboxModel(Xsfc::Model * m)
   _model_ptr = m;
 }
 
+bool blackboxFlightActive()
+{
+  return !_model_ptr || _model_ptr->isModeActive(Xsfc::MODE_ARMED) || _model_ptr->areMotorsRunning();
+}
+
+bool blackboxUsePsram()
+{
+  // Invalid persisted values choose the non-blocking mode, never DIRECT.
+  return !_model_ptr || _model_ptr->config.blackboxFlashMode != 0;
+}
+
 uint16_t getBatteryVoltageLatest(void)
 {
   if(!_model_ptr) return 0;

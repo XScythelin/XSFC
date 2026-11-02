@@ -61,6 +61,11 @@ int FAST_CODE_ATTR AccelSensor::read()
 
 int FAST_CODE_ATTR AccelSensor::filter()
 {
+  return filter(_model.state.accel.raw);
+}
+
+int FAST_CODE_ATTR AccelSensor::filter(const VectorInt16& sample)
+{
   if (!_model.accelActive())
   {
     return 0;
@@ -68,7 +73,7 @@ int FAST_CODE_ATTR AccelSensor::filter()
 
   Utils::Stats::Measure measure(_model.state.stats, COUNTER_ACCEL_FILTER);
 
-  _model.state.accel.adc = (VectorFloat)_model.state.accel.raw * _model.state.accel.scale;
+  _model.state.accel.adc = (VectorFloat)sample * _model.state.accel.scale;
 
   align(_model.state.accel.adc, _model.config.gyro.align);
   _model.state.accel.adc = _model.state.boardAlignment.apply(_model.state.accel.adc);
@@ -77,7 +82,7 @@ int FAST_CODE_ATTR AccelSensor::filter()
   {
     if (_model.config.debug.mode == DEBUG_ACCELEROMETER)
     {
-      _model.state.debug[i] = _model.state.accel.raw[i];
+      _model.state.debug[i] = sample[i];
     }
     _model.state.accel.adc.set(i, _filter[i].update(_model.state.accel.adc[i]));
     _model.state.accel.adc.set(i, _model.state.accel.filter[i].update(_model.state.accel.adc[i]));

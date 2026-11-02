@@ -156,14 +156,8 @@ int Blackbox::begin()
   targetPidLooptime = _model.state.loopTimer.interval;
   activePidLoopDenom = _model.config.loopSync;
 
-  if(_model.config.blackbox.pDenom >= 0 && _model.config.blackbox.pDenom <= 4)
-  {
-    blackboxConfigMutable()->sample_rate = _model.config.blackbox.pDenom;
-  }
-  else
-  {
-    blackboxConfigMutable()->sample_rate = blackboxCalculateSampleRate(_model.config.blackbox.pDenom);
-  }
+  blackboxConfigMutable()->sample_rate = sampleRateIndex(_model.config.blackbox.pDenom,
+    _model.state.loopTimer.interval);
   blackboxConfigMutable()->device = _model.config.blackbox.dev;
   blackboxConfigMutable()->fields_disabled_mask = ~_model.config.blackbox.fieldsMask;
   blackboxConfigMutable()->mode = _model.config.blackbox.mode;
@@ -214,8 +208,11 @@ int FAST_CODE_ATTR Blackbox::update()
 
   Utils::Stats::Measure measure(_model.state.stats, COUNTER_BLACKBOX);
 
-  uint32_t startTime = micros();
+  const uint32_t startTime = _model.config.debug.mode == DEBUG_PIDLOOP ? micros() : 0;
   updateArmed();
+  #if defined(USE_FLASHFS) && defined(ESP32P4)
+  flashfsCommitPending();
+  #endif
   updateMode();
   if(blackboxShouldLogIFrame() || blackboxShouldLogPFrame())
   {

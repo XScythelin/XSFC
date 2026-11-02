@@ -15,6 +15,7 @@ public:
   int update();
   int read();
   int filter();
+  int filter(const VectorInt16& sample);
   void updateTrimRotation();
 
 private:

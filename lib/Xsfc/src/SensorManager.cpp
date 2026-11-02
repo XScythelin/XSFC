@@ -35,12 +35,15 @@ int FAST_CODE_ATTR SensorManager::read()
 
   if(_model.state.loopTimer.syncTo(_model.state.gyro.timer) && gyroRead)
   {
-    _model.state.appQueue.send(Event(EVENT_GYRO_READ));
+    Event event(EVENT_GYRO_READ, _model.state.gyro.sampled, _model.state.gyro.raw);
+    _model.state.appQueue.send(event);
   }
 
   if(_model.state.accel.timer.syncTo(_model.state.gyro.timer))
   {
-    if(_accel.update()) _model.state.appQueue.send(Event(EVENT_ACCEL_READ));
+    // Publish a complete raw sample. Filtering owns accel.adc on the control
+    // core, so fusion/logging cannot observe a partially filtered vector.
+    if(_accel.read()) _model.state.appQueue.send(Event(EVENT_ACCEL_READ, _model.state.accel.raw));
     _model.state.mode.button = _button.update();
     return 1;
   }
@@ -56,7 +59,17 @@ int FAST_CODE_ATTR SensorManager::read()
 
 int FAST_CODE_ATTR SensorManager::preLoop()
 {
-  _gyro.filter();
+  return preLoop(_model.state.gyro.sampled);
+}
+
+int FAST_CODE_ATTR SensorManager::preLoop(const VectorFloat& sample)
+{
+  return preLoop(sample, _model.state.gyro.raw);
+}
+
+int FAST_CODE_ATTR SensorManager::preLoop(const VectorFloat& sample, const VectorInt16& raw)
+{
+  _gyro.filter(sample, raw);
   _flow.accumulateGyro();
   if(_model.state.gyro.biasSamples == 0)
   {
@@ -78,6 +91,11 @@ int FAST_CODE_ATTR SensorManager::fusion()
   _fusion.update();
   _altitude.update();
   return 1;
+}
+
+int SensorManager::processAccel(const VectorInt16& sample)
+{
+  return _accel.filter(sample);
 }
 
 // main task

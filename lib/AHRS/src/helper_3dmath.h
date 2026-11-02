@@ -2,23 +2,21 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 // Fast inverse square-root
 // See: http://en.wikipedia.org/wiki/Fast_inverse_square_root
 inline float invSqrt(float x)
 {
-// return 1.f / sqrt(x);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-aliasing"
-#pragma GCC diagnostic ignored "-Wuninitialized"
+  static_assert(sizeof(float) == sizeof(uint32_t), "invSqrt requires 32-bit float");
   float halfx = 0.5f * x;
   float y = x;
-  long i = *(long*)&y;
+  uint32_t i;
+  std::memcpy(&i, &y, sizeof(i));
   i = 0x5f3759df - (i >> 1);
-  y = *(float*)&i;
+  std::memcpy(&y, &i, sizeof(y));
   y = y * (1.5f - (halfx * y * y));
   y = y * (1.5f - (halfx * y * y));
-#pragma GCC diagnostic pop
   return y;
 }
 
