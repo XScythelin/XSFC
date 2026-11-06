@@ -11,6 +11,7 @@
 #include "ImuSITL.h"
 #include "Control/Altitude.hpp"
 #include "Sensor/BaroAltitude.hpp"
+#include "Sensor/RangeMeasurement.hpp"
 #include "SettingsSITL.h"
 #include "Input.h"
 #include "InputSITL.h"
@@ -28,7 +29,9 @@ int main(int argc, char** argv) {
   const bool diagnostics = std::getenv("XSFC_HOST_DIAGNOSTICS") != nullptr;
   const bool altitudeEndpoint = std::getenv("XSFC_HOST_ALTITUDE") != nullptr;
   const bool receiverEndpoint = std::getenv("XSFC_HOST_RECEIVER") != nullptr;
+  const bool rangeEndpoint = std::getenv("XSFC_HOST_RANGE") != nullptr;
   if (altitudeEndpoint && !rawImu) return 4;
+  if (rangeEndpoint && !altitudeEndpoint) return 4;
   const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
   if (exchangeMs < 1 || exchangeMs > 2) return 4;
   ImuSITL imu;
@@ -38,6 +41,8 @@ int main(int argc, char** argv) {
   Xsfc::Control::Altitude altitude(model);
   Xsfc::Sensor::BaroAltitude baro;
   Xsfc::Sensor::BaroFrame baroFrame;
+  Xsfc::Sensor::RangeMeasurement range;
+  Xsfc::Sensor::RangeFrame rangeFrame;
   InputSITL receiver;
   Xsfc::Input input(model, receiver);
   Xsfc::Control::Actuator actuator(model);
@@ -65,6 +70,11 @@ int main(int argc, char** argv) {
       model.config.baro.dev = Xsfc::BARO_BMP280;
       model.state.baro.present = true;
       altitude.begin();
+      if (rangeEndpoint) {
+        model.config.rangefinder.dev = Xsfc::RANGEFINDER_MSP;
+        model.config.featureMask |= Xsfc::FEATURE_RANGEFINDER;
+        range.begin(model.config.rangefinder.filter);
+      }
     }
   }
   mixer.begin();
@@ -75,7 +85,7 @@ int main(int argc, char** argv) {
     model.config.output.protocol = ESC_PROTOCOL_DSHOT300;
     for (int i = 0; i < 16; ++i) model.config.input.channel[i].map = i;
     for (auto& condition : model.config.conditions) condition.min = condition.max = 0;
-    const Xsfc::FlightMode modes[] = {Xsfc::MODE_ARMED, Xsfc::MODE_ANGLE, Xsfc::MODE_ALTHOLD};
+    const Xsfc::FlightMode modes[] = {Xsfc::MODE_ARMED, Xsfc::MODE_ANGLE, rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD};
     for (int i = 0; i < 3; ++i) {
       auto& condition = model.config.conditions[i];
       condition.id = modes[i]; condition.ch = Xsfc::AXIS_AUX_1 + i;
@@ -99,6 +109,9 @@ int main(int argc, char** argv) {
           !std::isfinite(pressure) || pressure < 1000 || pressure > 120000 ||
           (hold != 0 && hold != 1) || (baroHealthy != 0 && baroHealthy != 1))) return 4;
       int rxHealthy = 1;
+      int rangeMm = 0, rangeHealthy = 1;
+      if (rangeEndpoint && (std::scanf("%d %d", &rangeMm, &rangeHealthy) != 2 ||
+          (rangeHealthy != 0 && rangeHealthy != 1))) return 4;
       if (receiverEndpoint && (std::scanf("%d", &rxHealthy) != 1 || (rxHealthy != 0 && rxHealthy != 1))) return 4;
       if ((armed != 0 && armed != 1) || (angle != 0 && angle != 1)) return 4;
       for (int i = 0; i < 3; ++i) {
@@ -118,7 +131,7 @@ int main(int argc, char** argv) {
         receiver.channels[i] = std::lround(1500 + 500 * rc[i]);
       }
       const uint32_t modes = (angle ? 1u << Xsfc::MODE_ANGLE : 0u) |
-          (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold ? 1u << Xsfc::MODE_ALTHOLD : 0u);
+          (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold ? 1u << (rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD) : 0u);
       if (!receiverEndpoint) {
         model.updateSwitchActive(modes);
         model.updateModes(modes);
@@ -150,6 +163,22 @@ int main(int argc, char** argv) {
             accelSensor.update();
             fusion.update();
             if (altitudeEndpoint) {
+              if (rangeEndpoint && sitlTimeUs % 20000 == 0 && rangeHealthy) {
+                range.sample(rangeMm, model.state.attitude.cosTheta, micros(), 6000);
+                rangeFrame.present = true;
+                rangeFrame.valid = range.valid;
+                rangeFrame.validSamples = range.streak;
+                rangeFrame.height = range.height;
+                rangeFrame.distance = range.distance;
+                rangeFrame.vario = range.vario;
+                rangeFrame.sampleIntervalf = range.sampleDt;
+                rangeFrame.lastSampleUs = micros();
+                rangeFrame.status = range.status;
+                rangeFrame.raw = rangeMm;
+                rangeFrame.maxRangeMm = 6000;
+                ++rangeFrame.updateCount;
+                model.state.rangefinder.sample.store(rangeFrame);
+              }
               if (sitlTimeUs % 20000 == 0 && baroHealthy) {
                 const auto status = baro.update(pressure, micros(), model.isModeActive(Xsfc::MODE_ARMED));
                 baroFrame.healthy = true;
@@ -184,6 +213,9 @@ int main(int argc, char** argv) {
         if (altitudeEndpoint) std::printf("%.9g %.9g %.9g %d %d ", model.state.altitude.height,
             model.state.altitude.vario, model.state.altitude.target,
             model.state.altitude.engaged ? 1 : 0, model.baroReadyForAltHold() ? 1 : 0);
+        if (rangeEndpoint) std::printf("%.9g %.9g %d %d %d ", model.state.altitude.rangeHeight,
+            model.state.altitude.rangeVario, model.rangefinderReadyForHold() ? 1 : 0,
+            model.state.altitude.rangeSource ? 1 : 0, model.state.altitude.sensorLost ? 1 : 0);
         if (receiverEndpoint) std::printf("%u %u %d %d ", model.state.mode.mask,
             model.state.mode.armingDisabledFlags, static_cast<int>(model.state.failsafe.phase),
             model.state.input.channelsValid ? 1 : 0);

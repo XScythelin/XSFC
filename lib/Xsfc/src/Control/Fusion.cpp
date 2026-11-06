@@ -332,20 +332,22 @@ void FAST_CODE_ATTR Fusion::mahonyFusion()
   // sustained thrust-axis acceleration means level. This is a conservative
   // rejection heuristic, NOT translational-acceleration compensation: gyro
   // drift remains unobservable while observations are rejected.
-  bool useAccel = true;
+  const float normSq = ax * ax + ay * ay + az * az;
+  // DISARM does not imply landed: freefall and crash impulses must not
+  // redefine gravity before a subsequent ARM. Keep gyro propagation running.
+  bool useAccel = std::isfinite(normSq) &&
+      normSq > .81f * ACCEL_G * ACCEL_G && normSq < 1.21f * ACCEL_G * ACCEL_G;
   const bool armed = _model.isModeActive(MODE_ARMED);
   if(armed)
   {
     const Quaternion q = _mahony.getQuaternion();
-    const float normSq = ax * ax + ay * ay + az * az;
     const float gx = 2.f * (q.x * q.z - q.w * q.y);
     const float gy = 2.f * (q.w * q.x + q.y * q.z);
     const float gz = 1.f - 2.f * (q.x * q.x + q.y * q.y);
     const float dot = ax * gx + ay * gy + az * gz;
     // 0.9..1.1g and <=2 degrees innovation. Norm alone cannot detect
     // constant-norm acceleration. Do not integrate false gyro bias in flight.
-    useAccel = normSq > .81f * ACCEL_G * ACCEL_G && normSq < 1.21f * ACCEL_G * ACCEL_G &&
-               dot > 0.f && dot * dot > .998782f * normSq;
+    useAccel = useAccel && dot > 0.f && dot * dot > .998782f * normSq;
     _mahony.resetIntegral();
     _mahony.setKi(0.f);
   }
@@ -353,6 +355,7 @@ void FAST_CODE_ATTR Fusion::mahonyFusion()
   {
     _mahony.setKi(_model.config.fusion.gainI * .02f);
   }
+  if(!useAccel) _mahony.resetIntegral();
   _mahonyWasArmed = armed;
   if(_model.magActive() && _model.isModeActive(MODE_MAG))
   {
