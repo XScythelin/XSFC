@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 #include "Sensor/GyroSensor.h"
 #include "Sensor/AccelSensor.h"
 #include "Control/Fusion.h"
@@ -14,6 +15,8 @@ int main(int argc, char** argv) {
   Xsfc::Control::Controller controller(model);
   Xsfc::Output::Mixer mixer(model);
   const bool rawImu = argc > 1 && std::strcmp(argv[1], "--raw-imu") == 0;
+  const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
+  if (exchangeMs < 1 || exchangeMs > 2) return 4;
   ImuSITL imu;
   Xsfc::Sensor::GyroSensor gyroSensor(model);
   Xsfc::Sensor::AccelSensor accelSensor(model);
@@ -60,7 +63,7 @@ int main(int argc, char** argv) {
         model.state.input.us[i] = 1500 + 500 * rc[i];
       }
       model.updateModes((angle ? 1u << Xsfc::MODE_ANGLE : 0u) | (armed ? 1u << Xsfc::MODE_ARMED : 0u));
-      for (int substep = 0; substep < 4; ++substep) {
+      for (int substep = 0; substep < 4 * exchangeMs; ++substep) {
         sitlTimeUs += 250;
         model.state.loopTimer.update(micros());
         if (rawImu) {
