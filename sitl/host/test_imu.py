@@ -41,7 +41,7 @@ freefall = run([level] * 6000 + ['0 0 0 0 0 0 0 0 0 -1 0 1'] * 1000)
 assert max(abs(v) for v in freefall[:3]) < .02, freefall
 
 # Observe actual production filter input/output after calibration. Stimulus is
-# sampled at 1kHz and held for four 4kHz substeps, NOT a 4kHz sensor fidelity test.
+# sampled at 1kHz and held for eight 8kHz reads, NOT an 8kHz sensor fidelity test.
 vibration = [f'{math.sin(2 * math.pi * 180 * i * .001)} 0 0 0 0 9.80665 0 0 0 -1 0 1'
              for i in range(2000)]
 result = subprocess.run(['wsl.exe', '--exec', 'env', 'XSFC_HOST_DIAGNOSTICS=1',

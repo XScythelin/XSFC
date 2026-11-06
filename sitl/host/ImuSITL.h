@@ -23,7 +23,7 @@ public:
   int readGyro(VectorInt16& value) override { value = gyro; return 1; }
   int readAccel(VectorInt16& value) override { value = accel; return 1; }
   void setDLPFMode(uint8_t) override {}
-  int getRate() const override { return 4000; }
+  int getRate() const override { return 8000; }
   void setRate(int) override {}
   bool testConnection() override { return true; }
   static int16_t quantize(float value, float scale) {

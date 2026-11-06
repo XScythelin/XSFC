@@ -25,17 +25,23 @@ real aircraft PID tuning.
 
 `--raw-imu` uses the same 12-field protocol but replaces Euler fields with
 body specific force XYZ in m/s² (gyro remains rad/s). The synthetic device
-quantizes/clamps to ±2000deg/s / ±16g and invokes production GyroSensor.read,
-filter/postLoop at 4kHz, AccelSensor.update and Fusion.update at 500Hz.
-Measurements are held for four/eight substeps per 1/2ms exchange; this is
-not a 4kHz physical-sensor model. Device bus/register timing and internal
+quantizes/clamps to ±2000deg/s / ±16g and invokes production GyroSensor.read
+and prefilter at 8kHz, filter/postLoop and PID/mixer at 4kHz,
+AccelSensor.update and Fusion.update at 500Hz.
+Measurements are held for eight/sixteen substeps per 1/2ms exchange; this is
+not an independent 8kHz physical-sensor model. Device bus/register timing and internal
 ICM42688 hardware filters are not emulated. Calibration storage is inert
 and returns SAVE_ERROR, never accessing board EEPROM.
 
 The host supplies the synthetic device clock before Model::begin, verifies
-4kHz timer initialization, and restores normal fusion gain at gyro calibration
+8/4/4kHz gyro/PID/mixer timer initialization, and restores normal fusion gain at gyro calibration
 completion, matching SensorManager::preLoop. These are host integration fixes,
 not changes to production PID or fusion algorithms.
+
+`python sitl/host/test_schedule.py` checks actual gyro/PID/mixer call counts
+per simulated second for both exchange sizes; the endpoint validates cumulative
+counts at clean exit and reports them on stderr. This does not measure hardware
+execution timing or validate 8kHz physical IMU bandwidth.
 
 `python sitl/host/test_imu.py` verifies stationary level, gravity-vector tilt,
 dynamic roll, freefall and 180Hz attenuation through production filters with

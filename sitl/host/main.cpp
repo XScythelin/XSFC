@@ -49,15 +49,15 @@ int main(int argc, char** argv) {
   model.config.output.servoRate = 0;
   for (size_t axis = 0; axis < 4; ++axis) model.state.output.disarmed[axis] = model.config.output.minCommand;
   if (rawImu) {
-    model.config.loopSync = 1;
+    model.config.loopSync = 2;
     model.config.mixerSync = 1;
-    model.config.gyroRate = 4000;
+    model.config.gyroRate = 8000;
     // Hardware::begin supplies this before Model::begin on the real target.
     model.state.gyro.clock = imu.getRate();
     model.state.gyro.dev = &imu;
     model.state.gyro.present = model.state.accel.present = true;
     model.begin();
-    if (model.state.loopTimer.rate != 4000 || model.state.gyro.timer.rate != 4000) return 5;
+    if (model.state.loopTimer.rate != 4000 || model.state.gyro.timer.rate != 8000 || model.state.mixer.timer.rate != 4000) return 5;
     gyroSensor.begin();
     accelSensor.begin();
     fusion.begin();
@@ -85,6 +85,7 @@ int main(int argc, char** argv) {
     actuator.begin();
   }
   if (argc > 1) {
+    uint64_t exchanges = 0, gyroTicks = 0, pidTicks = 0, mixerTicks = 0;
     // Lockstep input: gyro xyz, attitude xyz (rad), RC r/p/y/throttle,
     // virtual arm, Angle enabled (0 = Acro). Body coordinates are the
     // production mixer convention. This endpoint still bypasses sensor fusion.
@@ -127,17 +128,19 @@ int main(int argc, char** argv) {
       receiver.channels[6] = hold ? 2000 : 1000;
       for (int i = 7; i < 16; ++i) receiver.channels[i] = 1000;
       receiver.connected = rxHealthy;
-      for (int substep = 0; substep < 4 * exchangeMs; ++substep) {
-        sitlTimeUs += 250;
-        model.state.loopTimer.update(micros());
-        if (receiverEndpoint) {
+      for (int substep = 0; substep < 8 * exchangeMs; ++substep) {
+        sitlTimeUs += 125;
+        const bool controlTick = sitlTimeUs % 250 == 0;
+        if (controlTick) model.state.loopTimer.update(micros());
+        if (receiverEndpoint && controlTick) {
           if (sitlTimeUs % 4000 == 0) receiver.fresh = true;
           input.update();
           if (sitlTimeUs % 1000 == 0) actuator.update();
         }
         if (rawImu) {
           gyroSensor.read();
-          gyroSensor.filter();
+          ++gyroTicks;
+          if (controlTick) gyroSensor.filter();
           // Match SensorManager::preLoop: startup gain is only for calibration.
           if (model.state.gyro.biasSamples == 0) {
             model.state.gyro.biasSamples = -1;
@@ -162,11 +165,16 @@ int main(int argc, char** argv) {
               altitude.update();
             }
           }
-          gyroSensor.postLoop();
+          if (controlTick) gyroSensor.postLoop();
         }
-        controller.update();
-        mixer.update();
+        if (controlTick) {
+          controller.update();
+          ++pidTicks;
+          mixer.update();
+          ++mixerTicks;
+        }
       }
+      ++exchanges;
       for (int i = 0; i < 4; ++i) std::printf("%d ", model.state.mixer.escMotor->pulses[i]);
       if (diagnostics) {
         for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.attitude.euler[i]);
@@ -182,12 +190,19 @@ int main(int argc, char** argv) {
       }
       std::puts(""); std::fflush(stdout);
     }
+    const uint64_t expectedPidTicks = exchanges * 4 * exchangeMs;
+    if (pidTicks != expectedPidTicks || mixerTicks != expectedPidTicks ||
+        (rawImu && gyroTicks != exchanges * 8 * exchangeMs)) return 7;
     if (rawImu) {
       std::fprintf(stderr, "IMU %.9g %.9g %.9g GYRO %.9g %.9g %.9g CAL %d\n",
                    model.state.attitude.euler.x, model.state.attitude.euler.y, model.state.attitude.euler.z,
                    model.state.gyro.adc.x, model.state.gyro.adc.y, model.state.gyro.adc.z,
                    static_cast<int>(model.state.gyro.calibrationState));
     }
+    std::fprintf(stderr, "SCHEDULE exchange_ms=%d exchanges=%llu gyro=%llu pid=%llu mixer=%llu\n",
+                 exchangeMs, static_cast<unsigned long long>(exchanges),
+                 static_cast<unsigned long long>(gyroTicks), static_cast<unsigned long long>(pidTicks),
+                 static_cast<unsigned long long>(mixerTicks));
     return 0;
   }
   model.state.input.ch[Xsfc::AXIS_THRUST] = -1.f;
