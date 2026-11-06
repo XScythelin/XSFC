@@ -15,10 +15,11 @@ That repository pins this firmware through a git submodule; do not duplicate
 flight-control algorithms in the simulator.
 
 Current host bridge accepts ideal gyro, ideal Euler attitude, normalized RC,
-virtual arm and Angle/Acro selection. It does NOT yet execute the production
-sensor/fusion/input/mode-manager pipeline, load board settings or emulate P4
+virtual arm and Angle/Acro selection. The default ideal endpoint bypasses
+sensor/fusion; neither endpoint executes the full input/mode-manager pipeline,
+loads board settings or emulates P4
 instruction timing. Default settings and synthetic physics cannot validate
-real aircraft PID tuning. Sensor pipeline integration is the next milestone.
+real aircraft PID tuning.
 
 ## Raw IMU endpoint
 
@@ -26,11 +27,22 @@ real aircraft PID tuning. Sensor pipeline integration is the next milestone.
 body specific force XYZ in m/s² (gyro remains rad/s). The synthetic device
 quantizes/clamps to ±2000deg/s / ±16g and invokes production GyroSensor.read,
 filter/postLoop at 4kHz, AccelSensor.update and Fusion.update at 500Hz.
-Measurements are currently held for four substeps per 1ms exchange; this is
+Measurements are held for four/eight substeps per 1/2ms exchange; this is
 not a 4kHz physical-sensor model. Device bus/register timing and internal
 ICM42688 hardware filters are not emulated. Calibration storage is inert
 and returns SAVE_ERROR, never accessing board EEPROM.
 
-`python sitl/host/test_imu.py` verifies stationary level and gravity-vector
-tilt convergence with disarmed outputs. Webots still uses the ideal bridge
-until its frame, startup calibration and closed-loop tests are validated.
+The host supplies the synthetic device clock before Model::begin, verifies
+4kHz timer initialization, and restores normal fusion gain at gyro calibration
+completion, matching SensorManager::preLoop. These are host integration fixes,
+not changes to production PID or fusion algorithms.
+
+`python sitl/host/test_imu.py` verifies stationary level, gravity-vector tilt,
+dynamic roll, freefall and 180Hz attenuation through production filters with
+disarmed outputs. `XSFC_HOST_DIAGNOSTICS=1` appends Euler XYZ, scaled gyro XYZ,
+filtered gyro XYZ and calibration state after the four motor pulses.
+Scaled gyro is already downstream of the read-stage prefilter, not raw registers.
+
+Webots 2ms raw closed-loop flight, raw seeded-noise + wrench-pulse flight,
+ideal flight and raw throttle-cut checks pass on the provisional plant.
+Interactive realtime performance and real-airframe fidelity remain unvalidated.

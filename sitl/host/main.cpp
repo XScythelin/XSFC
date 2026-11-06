@@ -15,6 +15,7 @@ int main(int argc, char** argv) {
   Xsfc::Control::Controller controller(model);
   Xsfc::Output::Mixer mixer(model);
   const bool rawImu = argc > 1 && std::strcmp(argv[1], "--raw-imu") == 0;
+  const bool diagnostics = std::getenv("XSFC_HOST_DIAGNOSTICS") != nullptr;
   const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
   if (exchangeMs < 1 || exchangeMs > 2) return 4;
   ImuSITL imu;
@@ -31,9 +32,13 @@ int main(int argc, char** argv) {
   if (rawImu) {
     model.config.loopSync = 1;
     model.config.mixerSync = 1;
+    model.config.gyroRate = 4000;
+    // Hardware::begin supplies this before Model::begin on the real target.
+    model.state.gyro.clock = imu.getRate();
     model.state.gyro.dev = &imu;
     model.state.gyro.present = model.state.accel.present = true;
     model.begin();
+    if (model.state.loopTimer.rate != 4000 || model.state.gyro.timer.rate != 4000) return 5;
     gyroSensor.begin();
     accelSensor.begin();
     fusion.begin();
@@ -69,6 +74,11 @@ int main(int argc, char** argv) {
         if (rawImu) {
           gyroSensor.read();
           gyroSensor.filter();
+          // Match SensorManager::preLoop: startup gain is only for calibration.
+          if (model.state.gyro.biasSamples == 0) {
+            model.state.gyro.biasSamples = -1;
+            fusion.restoreGain();
+          }
           if (sitlTimeUs % 2000 == 0) {
             accelSensor.update();
             fusion.update();
@@ -79,6 +89,12 @@ int main(int argc, char** argv) {
         mixer.update();
       }
       for (int i = 0; i < 4; ++i) std::printf("%d ", model.state.mixer.escMotor->pulses[i]);
+      if (diagnostics) {
+        for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.attitude.euler[i]);
+        for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.gyro.scaled[i]);
+        for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.gyro.adc[i]);
+        std::printf("%d ", static_cast<int>(model.state.gyro.calibrationState));
+      }
       std::puts(""); std::fflush(stdout);
     }
     if (rawImu) {
