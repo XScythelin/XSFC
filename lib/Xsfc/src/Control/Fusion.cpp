@@ -327,11 +327,38 @@ void FAST_CODE_ATTR Fusion::mahonyFusion()
   const float ax = _model.state.accel.adc.x;
   const float ay = _model.state.accel.adc.y;
   const float az = _model.state.accel.adc.z;
+  // In flight specific force is not an independent gravity observation.
+  // Reject large gravity innovations instead of teaching the estimator that
+  // sustained thrust-axis acceleration means level. This is a conservative
+  // rejection heuristic, NOT translational-acceleration compensation: gyro
+  // drift remains unobservable while observations are rejected.
+  bool useAccel = true;
+  const bool armed = _model.isModeActive(MODE_ARMED);
+  if(armed)
+  {
+    const Quaternion q = _mahony.getQuaternion();
+    const float normSq = ax * ax + ay * ay + az * az;
+    const float gx = 2.f * (q.x * q.z - q.w * q.y);
+    const float gy = 2.f * (q.w * q.x + q.y * q.z);
+    const float gz = 1.f - 2.f * (q.x * q.x + q.y * q.y);
+    const float dot = ax * gx + ay * gy + az * gz;
+    // 0.9..1.1g and <=2 degrees innovation. Norm alone cannot detect
+    // constant-norm acceleration. Do not integrate false gyro bias in flight.
+    useAccel = normSq > .81f * ACCEL_G * ACCEL_G && normSq < 1.21f * ACCEL_G * ACCEL_G &&
+               dot > 0.f && dot * dot > .998782f * normSq;
+    _mahony.resetIntegral();
+    _mahony.setKi(0.f);
+  }
+  else if(_mahonyWasArmed)
+  {
+    _mahony.setKi(_model.config.fusion.gainI * .02f);
+  }
+  _mahonyWasArmed = armed;
   if(_model.magActive() && _model.isModeActive(MODE_MAG))
   {
     _mahony.update(
       _model.state.attitude.rate.x, _model.state.attitude.rate.y, _model.state.attitude.rate.z,
-      ax, ay, az,
+       useAccel ? ax : 0.f, useAccel ? ay : 0.f, useAccel ? az : 0.f,
       _model.state.mag.adc.x,   _model.state.mag.adc.y,   _model.state.mag.adc.z
     );
   }
@@ -339,7 +366,7 @@ void FAST_CODE_ATTR Fusion::mahonyFusion()
   {
     _mahony.update(
       _model.state.attitude.rate.x,  _model.state.attitude.rate.y,  _model.state.attitude.rate.z,
-      ax, ay, az
+       useAccel ? ax : 0.f, useAccel ? ay : 0.f, useAccel ? az : 0.f
     );
   }
   _model.state.attitude.quaternion = _mahony.getQuaternion();

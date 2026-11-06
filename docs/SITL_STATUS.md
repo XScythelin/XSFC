@@ -83,5 +83,8 @@ Webots truth roll ~1.122rad vs estimate ~0.294rad at 7s. The ideal comparison
 recovers. A host-only known-motion probe also converges with rotated gravity but
 loses tilt with thrust-axis specific force. This is not a camera-only fault.
 Accelerometer gravity correction under sustained translation is implicated;
-real-board reproduction remains unverified. Short-pulse passes do not establish
-flight readiness. No truth injection, gain workaround or fusion fix is applied.
+real-board reproduction remains unverified. Production Mahony now rejects large
+gravity innovations while armed and disables false integral bias learning.
+Signed host trajectories, slow ramp, disarmed reconvergence and initial Webots
+long-tilt comparisons pass. See `docs/FUSION_ACCELERATION.md` for remaining drift
+and observability limitations; this is not hardware flight validation.

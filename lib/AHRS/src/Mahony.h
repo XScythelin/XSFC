@@ -46,6 +46,7 @@ public:
 	void setKi(float i) {
 		twoKi = i;
 	}
+  void resetIntegral() { integralFBx = integralFBy = integralFBz = 0.0f; }
 	const Quaternion getQuaternion() const {
 		return Quaternion(q0, q1, q2, q3);
   }

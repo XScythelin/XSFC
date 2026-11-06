@@ -32,6 +32,7 @@ class Fusion
   private:
     Model& _model;
     bool _first;
+    bool _mahonyWasArmed = false;
     Madgwick _madgwick;
     Mahony _mahony;
 };
