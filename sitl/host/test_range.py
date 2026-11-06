@@ -27,4 +27,9 @@ for invalid in (row(1, 1, healthy=0), row(1, 1, distance=7000), row(1, 1, distan
     result = run(base + [row(1, 1)]*100 + [invalid]*200)
     assert result[-1][17] == result[-1][21] == 0, result[-1]
     assert result[-1][23] == 1, result[-1]
+    # A healthy feed alone must not silently re-enable hold after loss.
+    still_latched = run(base + [row(1, 1)]*100 + [invalid]*200 + [row(1, 1)]*200)
+    assert still_latched[-1][17] == 0 and still_latched[-1][21] == 1, still_latched[-1]
+    resumed = run(base + [row(1, 1)]*100 + [invalid]*200 + [row(1, 0)]*200 + [row(1, 1)]*100)
+    assert resumed[-1][17] == resumed[-1][22] == 1, resumed[-1]
 print('Production RANGEHOLD: height, engage, stale, limit, invalid distance PASS')
