@@ -9,19 +9,31 @@
 #include "Sensor/AccelSensor.h"
 #include "Control/Fusion.h"
 #include "ImuSITL.h"
+#include "Control/Altitude.hpp"
+#include "Sensor/BaroAltitude.hpp"
+#include "SettingsSITL.h"
 
 int main(int argc, char** argv) {
   static Xsfc::Model model;
+  if (!loadSettingsSITL(model, std::getenv("XSFC_HOST_SETTINGS"))) {
+    std::fprintf(stderr, "Invalid SITL settings overlay; startup refused\n");
+    return 6;
+  }
   Xsfc::Control::Controller controller(model);
   Xsfc::Output::Mixer mixer(model);
   const bool rawImu = argc > 1 && std::strcmp(argv[1], "--raw-imu") == 0;
   const bool diagnostics = std::getenv("XSFC_HOST_DIAGNOSTICS") != nullptr;
+  const bool altitudeEndpoint = std::getenv("XSFC_HOST_ALTITUDE") != nullptr;
+  if (altitudeEndpoint && !rawImu) return 4;
   const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
   if (exchangeMs < 1 || exchangeMs > 2) return 4;
   ImuSITL imu;
   Xsfc::Sensor::GyroSensor gyroSensor(model);
   Xsfc::Sensor::AccelSensor accelSensor(model);
   Xsfc::Control::Fusion fusion(model);
+  Xsfc::Control::Altitude altitude(model);
+  Xsfc::Sensor::BaroAltitude baro;
+  Xsfc::Sensor::BaroFrame baroFrame;
   model.state.loopTimer.setRate(4000);
   model.state.mixer.timer.setRate(4000);
   model.state.gyro.timer.setRate(4000);
@@ -42,6 +54,11 @@ int main(int argc, char** argv) {
     gyroSensor.begin();
     accelSensor.begin();
     fusion.begin();
+    if (altitudeEndpoint) {
+      model.config.baro.dev = Xsfc::BARO_BMP280;
+      model.state.baro.present = true;
+      altitude.begin();
+    }
   }
   mixer.begin();
   controller.begin();
@@ -52,7 +69,12 @@ int main(int argc, char** argv) {
     float g[3], e[3], rc[4]; int armed, angle;
     while (std::scanf("%f %f %f %f %f %f %f %f %f %f %d %d",
         &g[0], &g[1], &g[2], &e[0], &e[1], &e[2],
-        &rc[0], &rc[1], &rc[2], &rc[3], &armed, &angle) == 12) {
+         &rc[0], &rc[1], &rc[2], &rc[3], &armed, &angle) == 12) {
+      float pressure = 101325.f;
+      int hold = 0, baroHealthy = 1;
+      if (altitudeEndpoint && (std::scanf("%f %d %d", &pressure, &hold, &baroHealthy) != 3 ||
+          !std::isfinite(pressure) || pressure < 1000 || pressure > 120000 ||
+          (hold != 0 && hold != 1) || (baroHealthy != 0 && baroHealthy != 1))) return 4;
       if ((armed != 0 && armed != 1) || (angle != 0 && angle != 1)) return 4;
       for (int i = 0; i < 3; ++i) {
         if (!std::isfinite(g[i]) || !std::isfinite(e[i])) return 4;
@@ -67,7 +89,10 @@ int main(int argc, char** argv) {
         model.state.input.ch[i] = rc[i];
         model.state.input.us[i] = 1500 + 500 * rc[i];
       }
-      model.updateModes((angle ? 1u << Xsfc::MODE_ANGLE : 0u) | (armed ? 1u << Xsfc::MODE_ARMED : 0u));
+      const uint32_t modes = (angle ? 1u << Xsfc::MODE_ANGLE : 0u) |
+          (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold ? 1u << Xsfc::MODE_ALTHOLD : 0u);
+      model.updateSwitchActive(modes);
+      model.updateModes(modes);
       for (int substep = 0; substep < 4 * exchangeMs; ++substep) {
         sitlTimeUs += 250;
         model.state.loopTimer.update(micros());
@@ -82,6 +107,21 @@ int main(int argc, char** argv) {
           if (sitlTimeUs % 2000 == 0) {
             accelSensor.update();
             fusion.update();
+            if (altitudeEndpoint) {
+              if (sitlTimeUs % 20000 == 0 && baroHealthy) {
+                const auto status = baro.update(pressure, micros(), armed);
+                baroFrame.healthy = true;
+                baroFrame.altitudeBiasSamples = status == Xsfc::Sensor::BaroAltitude::Result::READY ? -1 : 1;
+                baroFrame.pressure = pressure;
+                baroFrame.altitudeGround = baro.height;
+                baroFrame.vario = baro.vario;
+                baroFrame.sampleIntervalf = baro.sampleDt;
+                baroFrame.lastUpdateUs = micros();
+                ++baroFrame.updateCount;
+                model.state.baro.sample.store(baroFrame);
+              }
+              altitude.update();
+            }
           }
           gyroSensor.postLoop();
         }
@@ -94,6 +134,9 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.gyro.scaled[i]);
         for (int i = 0; i < 3; ++i) std::printf("%.9g ", model.state.gyro.adc[i]);
         std::printf("%d ", static_cast<int>(model.state.gyro.calibrationState));
+        if (altitudeEndpoint) std::printf("%.9g %.9g %.9g %d %d ", model.state.altitude.height,
+            model.state.altitude.vario, model.state.altitude.target,
+            model.state.altitude.engaged ? 1 : 0, model.baroReadyForAltHold() ? 1 : 0);
       }
       std::puts(""); std::fflush(stdout);
     }

@@ -46,3 +46,21 @@ Scaled gyro is already downstream of the read-stage prefilter, not raw registers
 Webots 2ms raw closed-loop flight, raw seeded-noise + wrench-pulse flight,
 ideal flight and raw throttle-cut checks pass on the provisional plant.
 Interactive realtime performance and real-airframe fidelity remain unvalidated.
+
+## Opt-in altitude endpoint and memory-only settings
+
+`XSFC_HOST_ALTITUDE=1` requires raw IMU and appends pressure Pa, hold request
+(0/1), barometer delivery healthy (0/1) to each input row. It runs production
+BaroAltitude calibration/filtering at 50Hz and Control::Altitude at 500Hz;
+production Controller runs the actual altitude hold logic. Missing samples age
+out through production BaroFrame timeout, not an ideal-height fallback.
+Diagnostics append estimated height, vario, target, engaged and baro-ready.
+`test_altitude.py` checks calibration, convergence, engagement, stale exit and
+disarm. This bypasses device register timing and BaroSensor's hardware driver.
+
+`XSFC_HOST_SETTINGS` selects a text overlay (`key integer` per line) before
+initialization. Supported fields are input RPY rate/srate/expo/limit, rate type,
+RPY PID P/I/D/F and gyro/D-term LPF frequencies. Unknown/out-of-range fields
+refuse startup; pins, calibration, storage commands and binary dumps are not
+accepted. This is partial settings import, not the full production CLI/input
+or actuator mode pipeline. `test_settings.py` checks effect and fail-closed behavior.
