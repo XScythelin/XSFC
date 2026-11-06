@@ -3,11 +3,21 @@
 #include "Output/Mixer.h"
 #include <cstdio>
 #include <cmath>
+#include <cstring>
+#include "Sensor/GyroSensor.h"
+#include "Sensor/AccelSensor.h"
+#include "Control/Fusion.h"
+#include "ImuSITL.h"
 
-int main(int argc, char**) {
+int main(int argc, char** argv) {
   static Xsfc::Model model;
   Xsfc::Control::Controller controller(model);
   Xsfc::Output::Mixer mixer(model);
+  const bool rawImu = argc > 1 && std::strcmp(argv[1], "--raw-imu") == 0;
+  ImuSITL imu;
+  Xsfc::Sensor::GyroSensor gyroSensor(model);
+  Xsfc::Sensor::AccelSensor accelSensor(model);
+  Xsfc::Control::Fusion fusion(model);
   model.state.loopTimer.setRate(4000);
   model.state.mixer.timer.setRate(4000);
   model.state.gyro.timer.setRate(4000);
@@ -15,6 +25,16 @@ int main(int argc, char**) {
   model.config.output.dshotTelemetry = false;
   model.config.output.servoRate = 0;
   for (size_t axis = 0; axis < 4; ++axis) model.state.output.disarmed[axis] = model.config.output.minCommand;
+  if (rawImu) {
+    model.config.loopSync = 1;
+    model.config.mixerSync = 1;
+    model.state.gyro.dev = &imu;
+    model.state.gyro.present = model.state.accel.present = true;
+    model.begin();
+    gyroSensor.begin();
+    accelSensor.begin();
+    fusion.begin();
+  }
   mixer.begin();
   controller.begin();
   if (argc > 1) {
@@ -28,9 +48,12 @@ int main(int argc, char**) {
       if ((armed != 0 && armed != 1) || (angle != 0 && angle != 1)) return 4;
       for (int i = 0; i < 3; ++i) {
         if (!std::isfinite(g[i]) || !std::isfinite(e[i])) return 4;
-        model.state.gyro.adc.set(i, g[i]);
-        model.state.attitude.euler.set(i, e[i]);
+        if (!rawImu) {
+          model.state.gyro.adc.set(i, g[i]);
+          model.state.attitude.euler.set(i, e[i]);
+        }
       }
+      if (rawImu) imu.sample(g, e); // fields 4..6 are specific force, NOT Euler angles.
       for (int i = 0; i < 4; ++i) {
         if (!std::isfinite(rc[i]) || rc[i] < -1 || rc[i] > 1) return 4;
         model.state.input.ch[i] = rc[i];
@@ -40,11 +63,26 @@ int main(int argc, char**) {
       for (int substep = 0; substep < 4; ++substep) {
         sitlTimeUs += 250;
         model.state.loopTimer.update(micros());
+        if (rawImu) {
+          gyroSensor.read();
+          gyroSensor.filter();
+          if (sitlTimeUs % 2000 == 0) {
+            accelSensor.update();
+            fusion.update();
+          }
+          gyroSensor.postLoop();
+        }
         controller.update();
         mixer.update();
       }
       for (int i = 0; i < 4; ++i) std::printf("%d ", model.state.mixer.escMotor->pulses[i]);
       std::puts(""); std::fflush(stdout);
+    }
+    if (rawImu) {
+      std::fprintf(stderr, "IMU %.9g %.9g %.9g GYRO %.9g %.9g %.9g CAL %d\n",
+                   model.state.attitude.euler.x, model.state.attitude.euler.y, model.state.attitude.euler.z,
+                   model.state.gyro.adc.x, model.state.gyro.adc.y, model.state.gyro.adc.z,
+                   static_cast<int>(model.state.gyro.calibrationState));
     }
     return 0;
   }

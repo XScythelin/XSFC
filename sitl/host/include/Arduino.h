@@ -17,6 +17,8 @@
 #define INPUT 0
 #define OUTPUT 1
 #define HEX 16
+#define PI 3.14159265358979323846
+#define TWO_PI 6.28318530717958647692
 class String : public std::string {
 public:
   String() = default;

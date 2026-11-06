@@ -11,8 +11,14 @@ def linux(path):
     return subprocess.check_output(['wsl.exe', '--exec', 'wslpath', '-a', str(path)], text=True).strip()
 
 sources = ['sitl/host/main.cpp', 'lib/Xsfc/src/Control/Controller.cpp', 'lib/Xsfc/src/Output/Mixer.cpp',
+            'sitl/host/StorageSITL.cpp', 'lib/Xsfc/src/Utils/FreqAnalyzer.cpp',
+            'lib/Xsfc/src/Utils/FilterHelper.cpp',
            'lib/Xsfc/src/Control/Pid.cpp', 'lib/Xsfc/src/Control/Rates.cpp',
-           'lib/Xsfc/src/Utils/Filter.cpp',
+            'lib/Xsfc/src/Utils/Filter.cpp',
+            'lib/Xsfc/src/Sensor/GyroSensor.cpp', 'lib/Xsfc/src/Sensor/AccelSensor.cpp',
+            'lib/Xsfc/src/Sensor/BaseSensor.cpp', 'lib/Xsfc/src/Control/Fusion.cpp',
+            'lib/Xsfc/src/Device/GyroDevice.cpp',
+            'lib/AHRS/src/Mahony.cpp', 'lib/AHRS/src/Madgwick.cpp',
            'lib/Xsfc/src/Utils/Stats.cpp', 'lib/EscDriver/src/EscDriverBase.cpp',
            'lib/Xsfc/src/Utils/Timer.cpp', 'lib/Xsfc/src/Connect/Msp.cpp',
            'lib/Xsfc/src/Connect/StatusLed.cpp', 'lib/AHRS/src/Kalman.cpp', 'lib/Xsfc/src/Utils/Crc.cpp']
