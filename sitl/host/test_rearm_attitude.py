@@ -23,4 +23,14 @@ for axis in (0, 1):
                             input='\n'.join(rows)+'\n', text=True, capture_output=True, check=True, timeout=30)
     attitude = list(map(float, result.stdout.splitlines()[-1].split()))[4:7]
     assert abs(attitude[axis] - .35) < .04, (axis, attitude)
+    # After a stationary landing, gravity must still recover a different tilt;
+    # the new rejection must not permanently freeze the estimate.
+    gravity = [0., 0., 9.80665 * math.cos(-.2)]
+    gravity[1 if axis == 0 else 0] = 9.80665 * math.sin(-.2) * (1 if axis == 0 else -1)
+    sample(20000, 0, accel=gravity)
+    sample(500, 1, accel=gravity)
+    result = subprocess.run(['wsl.exe', '--exec', 'env', 'XSFC_HOST_DIAGNOSTICS=1', exe, '--raw-imu', '2'],
+                            input='\n'.join(rows)+'\n', text=True, capture_output=True, check=True, timeout=30)
+    attitude = list(map(float, result.stdout.splitlines()[-1].split()))[4:7]
+    assert abs(attitude[axis] + .2) < .04, (axis, attitude)
 print('Repeated ARM: disarmed freefall rotation/impact preserves gravity reference PASS')
