@@ -12,6 +12,9 @@
 #include "Control/Altitude.hpp"
 #include "Sensor/BaroAltitude.hpp"
 #include "SettingsSITL.h"
+#include "Input.h"
+#include "InputSITL.h"
+#include "Control/Actuator.h"
 
 int main(int argc, char** argv) {
   static Xsfc::Model model;
@@ -24,6 +27,7 @@ int main(int argc, char** argv) {
   const bool rawImu = argc > 1 && std::strcmp(argv[1], "--raw-imu") == 0;
   const bool diagnostics = std::getenv("XSFC_HOST_DIAGNOSTICS") != nullptr;
   const bool altitudeEndpoint = std::getenv("XSFC_HOST_ALTITUDE") != nullptr;
+  const bool receiverEndpoint = std::getenv("XSFC_HOST_RECEIVER") != nullptr;
   if (altitudeEndpoint && !rawImu) return 4;
   const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
   if (exchangeMs < 1 || exchangeMs > 2) return 4;
@@ -34,6 +38,9 @@ int main(int argc, char** argv) {
   Xsfc::Control::Altitude altitude(model);
   Xsfc::Sensor::BaroAltitude baro;
   Xsfc::Sensor::BaroFrame baroFrame;
+  InputSITL receiver;
+  Xsfc::Input input(model, receiver);
+  Xsfc::Control::Actuator actuator(model);
   model.state.loopTimer.setRate(4000);
   model.state.mixer.timer.setRate(4000);
   model.state.gyro.timer.setRate(4000);
@@ -62,6 +69,21 @@ int main(int argc, char** argv) {
   }
   mixer.begin();
   controller.begin();
+  if (receiverEndpoint) {
+    // Real boards select their ESC backend in saved config. The host's memory
+    // backend needs an enabled protocol for production arming checks as well.
+    model.config.output.protocol = ESC_PROTOCOL_DSHOT300;
+    for (int i = 0; i < 16; ++i) model.config.input.channel[i].map = i;
+    for (auto& condition : model.config.conditions) condition.min = condition.max = 0;
+    const Xsfc::FlightMode modes[] = {Xsfc::MODE_ARMED, Xsfc::MODE_ANGLE, Xsfc::MODE_ALTHOLD};
+    for (int i = 0; i < 3; ++i) {
+      auto& condition = model.config.conditions[i];
+      condition.id = modes[i]; condition.ch = Xsfc::AXIS_AUX_1 + i;
+      condition.min = 1700; condition.max = 2100;
+    }
+    input.begin();
+    actuator.begin();
+  }
   if (argc > 1) {
     // Lockstep input: gyro xyz, attitude xyz (rad), RC r/p/y/throttle,
     // virtual arm, Angle enabled (0 = Acro). Body coordinates are the
@@ -75,6 +97,8 @@ int main(int argc, char** argv) {
       if (altitudeEndpoint && (std::scanf("%f %d %d", &pressure, &hold, &baroHealthy) != 3 ||
           !std::isfinite(pressure) || pressure < 1000 || pressure > 120000 ||
           (hold != 0 && hold != 1) || (baroHealthy != 0 && baroHealthy != 1))) return 4;
+      int rxHealthy = 1;
+      if (receiverEndpoint && (std::scanf("%d", &rxHealthy) != 1 || (rxHealthy != 0 && rxHealthy != 1))) return 4;
       if ((armed != 0 && armed != 1) || (angle != 0 && angle != 1)) return 4;
       for (int i = 0; i < 3; ++i) {
         if (!std::isfinite(g[i]) || !std::isfinite(e[i])) return 4;
@@ -86,16 +110,31 @@ int main(int argc, char** argv) {
       if (rawImu) imu.sample(g, e); // fields 4..6 are specific force, NOT Euler angles.
       for (int i = 0; i < 4; ++i) {
         if (!std::isfinite(rc[i]) || rc[i] < -1 || rc[i] > 1) return 4;
-        model.state.input.ch[i] = rc[i];
-        model.state.input.us[i] = 1500 + 500 * rc[i];
+        if (!receiverEndpoint) {
+          model.state.input.ch[i] = rc[i];
+          model.state.input.us[i] = 1500 + 500 * rc[i];
+        }
+        receiver.channels[i] = std::lround(1500 + 500 * rc[i]);
       }
       const uint32_t modes = (angle ? 1u << Xsfc::MODE_ANGLE : 0u) |
           (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold ? 1u << Xsfc::MODE_ALTHOLD : 0u);
-      model.updateSwitchActive(modes);
-      model.updateModes(modes);
+      if (!receiverEndpoint) {
+        model.updateSwitchActive(modes);
+        model.updateModes(modes);
+      }
+      receiver.channels[4] = armed ? 2000 : 1000;
+      receiver.channels[5] = angle ? 2000 : 1000;
+      receiver.channels[6] = hold ? 2000 : 1000;
+      for (int i = 7; i < 16; ++i) receiver.channels[i] = 1000;
+      receiver.connected = rxHealthy;
       for (int substep = 0; substep < 4 * exchangeMs; ++substep) {
         sitlTimeUs += 250;
         model.state.loopTimer.update(micros());
+        if (receiverEndpoint) {
+          if (sitlTimeUs % 4000 == 0) receiver.fresh = true;
+          input.update();
+          if (sitlTimeUs % 1000 == 0) actuator.update();
+        }
         if (rawImu) {
           gyroSensor.read();
           gyroSensor.filter();
@@ -109,7 +148,7 @@ int main(int argc, char** argv) {
             fusion.update();
             if (altitudeEndpoint) {
               if (sitlTimeUs % 20000 == 0 && baroHealthy) {
-                const auto status = baro.update(pressure, micros(), armed);
+                const auto status = baro.update(pressure, micros(), model.isModeActive(Xsfc::MODE_ARMED));
                 baroFrame.healthy = true;
                 baroFrame.altitudeBiasSamples = status == Xsfc::Sensor::BaroAltitude::Result::READY ? -1 : 1;
                 baroFrame.pressure = pressure;
@@ -137,6 +176,9 @@ int main(int argc, char** argv) {
         if (altitudeEndpoint) std::printf("%.9g %.9g %.9g %d %d ", model.state.altitude.height,
             model.state.altitude.vario, model.state.altitude.target,
             model.state.altitude.engaged ? 1 : 0, model.baroReadyForAltHold() ? 1 : 0);
+        if (receiverEndpoint) std::printf("%u %u %d %d ", model.state.mode.mask,
+            model.state.mode.armingDisabledFlags, static_cast<int>(model.state.failsafe.phase),
+            model.state.input.channelsValid ? 1 : 0);
       }
       std::puts(""); std::fflush(stdout);
     }

@@ -11,6 +11,8 @@ def linux(path):
     return subprocess.check_output(['wsl.exe', '--exec', 'wslpath', '-a', str(path)], text=True).strip()
 
 sources = ['sitl/host/main.cpp', 'lib/Xsfc/src/Control/Controller.cpp', 'lib/Xsfc/src/Output/Mixer.cpp',
+             'lib/Xsfc/src/Input.cpp', 'lib/Xsfc/src/Control/Actuator.cpp', 'sitl/host/GpioSITL.cpp',
+             'lib/Xsfc/src/Target/Queue.cpp',
             'sitl/host/StorageSITL.cpp', 'lib/Xsfc/src/Utils/FreqAnalyzer.cpp',
             'lib/Xsfc/src/Utils/FilterHelper.cpp',
            'lib/Xsfc/src/Control/Pid.cpp', 'lib/Xsfc/src/Control/Rates.cpp',
@@ -31,5 +33,10 @@ for source in sources:
         raise SystemExit(result.returncode)
     print('Compiled production source:', source, flush=True)
 command = ['wsl.exe', '--exec', 'g++', *[linux(BUILD / (Path(source).stem + '.o')) for source in sources],
-           '-o', linux(BUILD / 'xsfc-host')]
-raise SystemExit(subprocess.run(command).returncode)
+           '-o', linux(BUILD / 'xsfc-host-next')]
+result = subprocess.run(command)
+if result.returncode:
+    raise SystemExit(result.returncode)
+# Do not overwrite a mapped executable in an existing WSL flight session.
+# Publish a new inode only after a successful link.
+(BUILD / 'xsfc-host-next').replace(BUILD / 'xsfc-host')

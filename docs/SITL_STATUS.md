@@ -16,8 +16,8 @@ flight-control algorithms in the simulator.
 
 Current host bridge accepts ideal gyro, ideal Euler attitude, normalized RC,
 virtual arm and Angle/Acro selection. The default ideal endpoint bypasses
-sensor/fusion; neither endpoint executes the full input/mode-manager pipeline,
-loads board settings or emulates P4
+sensor/fusion; the optional receiver endpoint below executes Input/Actuator.
+Neither endpoint loads complete board settings or emulates P4
 instruction timing. Default settings and synthetic physics cannot validate
 real aircraft PID tuning.
 
@@ -64,3 +64,24 @@ RPY PID P/I/D/F and gyro/D-term LPF frequencies. Unknown/out-of-range fields
 refuse startup; pins, calibration, storage commands and binary dumps are not
 accepted. This is partial settings import, not the full production CLI/input
 or actuator mode pipeline. `test_settings.py` checks effect and fail-closed behavior.
+
+## Production receiver endpoint
+
+`XSFC_HOST_RECEIVER=1` appends receiver delivery healthy (0/1), after optional
+barometer fields. Synthetic 250Hz frames feed production Input and Actuator,
+including RC smoothing, AUX ARM/Angle/AltHold and RX timeout/failsafe. Diagnostics
+append mode mask, arming-disabled flags, failsafe phase and channels-valid.
+The memory ESC protocol is enabled solely for host arming checks. No physical
+receiver, GPIO or ESC is accessed. `test_receiver.py` checks startup gating,
+arming, filtered throttle, loss detection and disarm. Webots receiver-flight
+and receiver-loss pass at 2ms on the current development binary.
+
+## Sustained acceleration blocker
+
+Long roll/pitch holds expose substantial production Mahony estimate divergence:
+Webots truth roll ~1.122rad vs estimate ~0.294rad at 7s. The ideal comparison
+recovers. A host-only known-motion probe also converges with rotated gravity but
+loses tilt with thrust-axis specific force. This is not a camera-only fault.
+Accelerometer gravity correction under sustained translation is implicated;
+real-board reproduction remains unverified. Short-pulse passes do not establish
+flight readiness. No truth injection, gain workaround or fusion fix is applied.

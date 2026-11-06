@@ -3,16 +3,20 @@
 #include "Model.h"
 #include "Utils/Math.hpp"
 #include "Device/InputDevice.h"
+#ifndef XSFC_SITL
 #include "Device/InputPPM.h"
 #include "Device/InputIBUS.hpp"
 #include "Device/InputSBUS.h"
 #include "Device/InputCRSF.h"
 #include "TelemetryManager.h"
+#endif
 #if defined(XSFC_ESPNOW)
 #include "Device/InputEspNow.h"
 #endif
 
 namespace Xsfc {
+
+class TelemetryManager;
 
 enum FailsafeChannelMode {
   FAILSAFE_MODE_AUTO,
@@ -31,6 +35,9 @@ class Input
 {
   public:
     Input(Model& model, TelemetryManager& telemetry);
+#ifdef XSFC_SITL
+    Input(Model& model, Device::InputDevice& device);
+#endif
 
     int begin();
     int update();
@@ -57,16 +64,18 @@ class Input
     }
 
     Model& _model;
-    TelemetryManager& _telemetry;
+    TelemetryManager* _telemetry;
     Device::InputDevice * _device;
     Utils::Filter _filter[INPUT_CHANNELS];
     float _step;
+#ifndef XSFC_SITL
     Device::InputPPM _ppm;
     Device::InputIBUS _ibus;
     Device::InputSBUS _sbus;
     Device::InputCRSF _crsf;
 #if defined(XSFC_ESPNOW)
     Device::InputEspNow _espnow;
+#endif
 #endif
 
     static constexpr uint32_t TENTH_TO_US = 100000UL;  // 1_000_000 / 10;

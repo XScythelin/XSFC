@@ -5,7 +5,10 @@
 
 namespace Xsfc {
 
-Input::Input(Model& model, TelemetryManager& telemetry): _model(model), _telemetry(telemetry) {}
+Input::Input(Model& model, TelemetryManager& telemetry): _model(model), _telemetry(&telemetry), _device(nullptr) {}
+#ifdef XSFC_SITL
+Input::Input(Model& model, Device::InputDevice& device): _model(model), _telemetry(nullptr), _device(&device) {}
+#endif
 
 int Input::begin()
 {
@@ -371,6 +374,9 @@ void FAST_CODE_ATTR Input::updateFrameRate()
 
 Device::InputDevice * Input::getInputDevice()
 {
+#ifdef XSFC_SITL
+  return _device;
+#else
   Device::SerialDevice * serial = _model.getSerialStream(SERIAL_FUNCTION_RX_SERIAL);
   if(serial && _model.isFeatureActive(FEATURE_RX_SERIAL))
   {
@@ -387,7 +393,7 @@ Device::InputDevice * Input::getInputDevice()
         return &_sbus;
 
       case SERIALRX_CRSF:
-        _crsf.begin(serial, _model.isFeatureActive(FEATURE_TELEMETRY) ? &_telemetry : nullptr);
+        _crsf.begin(serial, _model.isFeatureActive(FEATURE_TELEMETRY) ? _telemetry : nullptr);
         _model.logger.info().logln(F("RX CRSF"));
         return &_crsf;
     }
@@ -408,6 +414,7 @@ Device::InputDevice * Input::getInputDevice()
 #endif
 
   return nullptr;
+#endif
 }
 
 }
