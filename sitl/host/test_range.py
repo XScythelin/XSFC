@@ -1,5 +1,6 @@
 """Exercise production range processing/HoldSafety without hardware or storage."""
 from pathlib import Path
+import math
 import os
 import subprocess
 
@@ -33,3 +34,12 @@ for invalid in (row(1, 1, healthy=0), row(1, 1, distance=7000), row(1, 1, distan
     resumed = run(base + [row(1, 1)]*100 + [invalid]*200 + [row(1, 0)]*200 + [row(1, 1)]*100)
     assert resumed[-1][17] == resumed[-1][22] == 1, resumed[-1]
 print('Production RANGEHOLD: height, engage, stale, limit, invalid distance PASS')
+
+for angle in (.2, .5):
+    tilted = f'0 0 0 0 {9.80665*math.sin(angle)} {9.80665*math.cos(angle)} 0 0 0 0 0 1 101325 0 1 1200 1'
+    result = run([tilted]*4000)
+    if angle < .4:
+        assert result[-1][21] == 1 and abs(result[-1][19]-1.2*math.cos(angle)) < .02, result[-1]
+    else:
+        assert result[-1][21] == 0, result[-1]
+print('Production range: estimated-tilt correction and excessive-tilt rejection PASS')
