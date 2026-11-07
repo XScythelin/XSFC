@@ -16,6 +16,7 @@
 #include "Input.h"
 #include "InputSITL.h"
 #include "Control/Actuator.h"
+#include "Sensor/FlowSensor.hpp"
 
 int main(int argc, char** argv) {
   static Xsfc::Model model;
@@ -30,6 +31,9 @@ int main(int argc, char** argv) {
   const bool altitudeEndpoint = std::getenv("XSFC_HOST_ALTITUDE") != nullptr;
   const bool receiverEndpoint = std::getenv("XSFC_HOST_RECEIVER") != nullptr;
   const bool rangeEndpoint = std::getenv("XSFC_HOST_RANGE") != nullptr;
+  const bool flowEndpoint = std::getenv("XSFC_HOST_FLOW") != nullptr;
+  const bool separateHold = flowEndpoint && std::getenv("XSFC_HOST_SEPARATE_HOLD") != nullptr;
+  if (flowEndpoint && !rangeEndpoint) return 4;
   if (altitudeEndpoint && !rawImu) return 4;
   if (rangeEndpoint && !altitudeEndpoint) return 4;
   const int exchangeMs = argc > 2 ? std::atoi(argv[2]) : 1;
@@ -43,6 +47,9 @@ int main(int argc, char** argv) {
   Xsfc::Sensor::BaroFrame baroFrame;
   Xsfc::Sensor::RangeMeasurement range;
   Xsfc::Sensor::RangeFrame rangeFrame;
+  Xsfc::Sensor::FlowSensor flow(model);
+  Xsfc::Sensor::FlowFeed flowFeed;
+  double flowIntegralX = 0., flowIntegralY = 0.;
   InputSITL receiver;
   Xsfc::Input input(model, receiver);
   Xsfc::Control::Actuator actuator(model);
@@ -78,6 +85,12 @@ int main(int argc, char** argv) {
     }
   }
   mixer.begin();
+  if (flowEndpoint) {
+    model.config.navigation.flowDev = Xsfc::FLOW_MTF;
+    model.config.navigation.flowAlign = Xsfc::ALIGN_DEFAULT;
+    model.config.navigation.flowDelayMs = 0;
+    flow.begin();
+  }
   controller.begin();
   if (receiverEndpoint) {
     // Real boards select their ESC backend in saved config. The host's memory
@@ -85,8 +98,8 @@ int main(int argc, char** argv) {
     model.config.output.protocol = ESC_PROTOCOL_DSHOT300;
     for (int i = 0; i < 16; ++i) model.config.input.channel[i].map = i;
     for (auto& condition : model.config.conditions) condition.min = condition.max = 0;
-    const Xsfc::FlightMode modes[] = {Xsfc::MODE_ARMED, Xsfc::MODE_ANGLE, rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD};
-    for (int i = 0; i < 3; ++i) {
+    const Xsfc::FlightMode modes[] = {Xsfc::MODE_ARMED, Xsfc::MODE_ANGLE, separateHold ? Xsfc::MODE_ALTHOLD : (flowEndpoint ? Xsfc::MODE_POSHOLD : (rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD)), Xsfc::MODE_POSHOLD};
+    for (int i = 0; i < (separateHold ? 4 : 3); ++i) {
       auto& condition = model.config.conditions[i];
       condition.id = modes[i]; condition.ch = Xsfc::AXIS_AUX_1 + i;
       condition.min = 1700; condition.max = 2100;
@@ -112,6 +125,13 @@ int main(int argc, char** argv) {
       int rangeMm = 0, rangeHealthy = 1;
       if (rangeEndpoint && (std::scanf("%d %d", &rangeMm, &rangeHealthy) != 2 ||
           (rangeHealthy != 0 && rangeHealthy != 1))) return 4;
+      float flowRateX = 0.f, flowRateY = 0.f;
+      int flowQuality = 255, flowHealthy = 1;
+      if (flowEndpoint && (std::scanf("%f %f %d %d", &flowRateX, &flowRateY, &flowQuality, &flowHealthy) != 4 ||
+          !std::isfinite(flowRateX) || !std::isfinite(flowRateY) || flowQuality < 0 || flowQuality > 255 ||
+          (flowHealthy != 0 && flowHealthy != 1))) return 4;
+      int positionHold = 0;
+      if (separateHold && (std::scanf("%d", &positionHold) != 1 || (positionHold != 0 && positionHold != 1))) return 4;
       if (receiverEndpoint && (std::scanf("%d", &rxHealthy) != 1 || (rxHealthy != 0 && rxHealthy != 1))) return 4;
       if ((armed != 0 && armed != 1) || (angle != 0 && angle != 1)) return 4;
       for (int i = 0; i < 3; ++i) {
@@ -131,15 +151,16 @@ int main(int argc, char** argv) {
         receiver.channels[i] = std::lround(1500 + 500 * rc[i]);
       }
       const uint32_t modes = (angle ? 1u << Xsfc::MODE_ANGLE : 0u) |
-          (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold ? 1u << (rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD) : 0u);
+          (armed ? 1u << Xsfc::MODE_ARMED : 0u) | (hold && !positionHold ? 1u << (separateHold ? Xsfc::MODE_ALTHOLD : (flowEndpoint ? Xsfc::MODE_POSHOLD : (rangeEndpoint ? Xsfc::MODE_RANGEHOLD : Xsfc::MODE_ALTHOLD))) : 0u) | (positionHold ? 1u << Xsfc::MODE_POSHOLD : 0u);
       if (!receiverEndpoint) {
         model.updateSwitchActive(modes);
         model.updateModes(modes);
       }
       receiver.channels[4] = armed ? 2000 : 1000;
       receiver.channels[5] = angle ? 2000 : 1000;
-      receiver.channels[6] = hold ? 2000 : 1000;
+      receiver.channels[6] = hold && !positionHold ? 2000 : 1000;
       for (int i = 7; i < 16; ++i) receiver.channels[i] = 1000;
+      if (separateHold) receiver.channels[7] = positionHold ? 2000 : 1000;
       receiver.connected = rxHealthy;
       for (int substep = 0; substep < 8 * exchangeMs; ++substep) {
         sitlTimeUs += 125;
@@ -152,6 +173,11 @@ int main(int argc, char** argv) {
         }
         if (rawImu) {
           gyroSensor.read();
+          if (flowEndpoint) {
+            flow.accumulateGyro();
+            flowIntegralX += flowRateX * .000125 * 200.;
+            flowIntegralY += flowRateY * .000125 * 200.;
+          }
           ++gyroTicks;
           if (controlTick) gyroSensor.filter();
           // Match SensorManager::preLoop: startup gain is only for calibration.
@@ -192,6 +218,26 @@ int main(int argc, char** argv) {
                 model.state.baro.sample.store(baroFrame);
               }
               altitude.update();
+              if (flowEndpoint) {
+                if (sitlTimeUs % 20000 == 0) {
+                  if (flowHealthy) {
+                    flowFeed.motionX = std::lround(flowIntegralX);
+                    flowFeed.motionY = std::lround(flowIntegralY);
+                    // Preserve sub-count displacement across frames, as a
+                    // sensor accumulator does; never discard slow motion.
+                    flowIntegralX -= flowFeed.motionX;
+                    flowIntegralY -= flowFeed.motionY;
+                    flowFeed.interval = 20000;
+                    flowFeed.timestamp = micros();
+                    flowFeed.quality = flowQuality;
+                    flowFeed.seen = true;
+                    ++flowFeed.count;
+                    model.state.flow.feed.store(flowFeed);
+                  }
+                  if (!flowHealthy) flowIntegralX = flowIntegralY = 0.;
+                }
+                flow.update();
+              }
             }
           }
           if (controlTick) gyroSensor.postLoop();
@@ -230,6 +276,14 @@ int main(int argc, char** argv) {
                 model.state.output.ch[axis], p.outputSaturated ? 1 : 0);
           }
         }
+        if (flowEndpoint) {
+          const auto frame = model.flowSample();
+          const auto& ph = model.state.posHold;
+          std::printf("%.9g %.9g %d %d %.9g %.9g %.9g %.9g %d %d ",
+              frame.velocityX, frame.velocityY, frame.valid ? 1 : 0, (int)frame.status,
+              ph.posX, ph.posY, ph.angle[0], ph.angle[1], ph.engaged ? 1 : 0, ph.sensorLost ? 1 : 0);
+        }
+        if (separateHold) std::printf("%u ", model.state.mode.maskSwitch);
         if (receiverEndpoint) std::printf("%u %u %d %d ", model.state.mode.mask,
             model.state.mode.armingDisabledFlags, static_cast<int>(model.state.failsafe.phase),
             model.state.input.channelsValid ? 1 : 0);

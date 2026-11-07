@@ -32,6 +32,18 @@ inline bool loadSettingsSITL(Xsfc::Model& model, const char* path) {
       if (key == pid + "_f" && value >= 0 && value <= 255) { model.config.pid[i].F = value; found = true; }
     }
     if (key == "input_rate_type" && value >= 0 && value <= 4) { model.config.input.rateType = value; found = true; }
+    const char* holdNames[] = {"althold_pos", "althold_vel", "poshold_pos", "poshold_vel"};
+    const int holdAxes[] = {Xsfc::FC_PID_ALT, Xsfc::FC_PID_VEL, Xsfc::FC_PID_POS, Xsfc::FC_PID_POSR};
+    for (int i = 0; i < 4; ++i) {
+      const std::string prefix = std::string("pid_") + holdNames[i];
+      auto& pid = model.config.pid[holdAxes[i]];
+      if (value >= 0 && value <= 255) {
+        if (key == prefix + "_p") { pid.P = value; found = true; }
+        if (key == prefix + "_i") { pid.I = value; found = true; }
+        if (key == prefix + "_d") { pid.D = value; found = true; }
+        if (key == prefix + "_f") { pid.F = value; found = true; }
+      }
+    }
     auto frequency = [&](const char* name, auto& field) {
       if (key == name && value >= 0 && value <= 1900) { field = value; found = true; }
     };
