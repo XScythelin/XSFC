@@ -1,0 +1,23 @@
+<mujoco model="XSFC P4 quad prototype">
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <visual><global offwidth="1280" offheight="720"/></visual>
+  <asset><texture name="grid" type="2d" builtin="checker" rgb1=".18 .22 .25" rgb2=".3 .35 .38" width="128" height="128"/><material name="floor" texture="grid" texrepeat="30 30"/></asset>
+  <worldbody>
+    <light pos="0 0 10"/>
+    <geom type="plane" size="50 50 .1" material="floor"/>
+    <geom type="box" pos="4 2 .5" size=".5 .5 .5" rgba=".8 .5 .2 1"/>
+    <body name="quad" pos="0 0 .15">
+      <freejoint/>
+      <inertial pos="0 0 0" mass=".65" diaginertia=".003 .003 .005"/>
+      <geom type="box" size=".09 .045 .025" rgba=".15 .4 .8 1"/>
+      <geom type="capsule" fromto="-.11 -.11 0 .11 .11 0" size=".012"/>
+      <geom type="capsule" fromto="-.11 .11 0 .11 -.11 0" size=".012"/>
+      <geom type="cylinder" pos=".11 .11 .01" size=".055 .003" mass="0" rgba="1 .2 .1 .6"/>
+      <geom type="cylinder" pos=".11 -.11 .01" size=".055 .003" mass="0" rgba="1 .2 .1 .6"/>
+      <geom type="cylinder" pos="-.11 .11 .01" size=".055 .003" mass="0" rgba=".1 .2 .8 .6"/>
+      <geom type="cylinder" pos="-.11 -.11 .01" size=".055 .003" mass="0" rgba=".1 .2 .8 .6"/>
+      <site name="imu" size=".005"/>
+    </body>
+  </worldbody>
+  <sensor><gyro site="imu" name="gyro"/><accelerometer site="imu" name="accel"/></sensor>
+</mujoco>

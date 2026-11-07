@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "TBS Joystick",
+  "guid": "0300b221d80400001057000000000000",
+  "channels": {
+    "roll": {
+      "axis": 3,
+      "min": -1.0,
+      "max": 0.999969482421875,
+      "center": -0.0009765625,
+      "sign": 1
+    },
+    "pitch": {
+      "axis": 1,
+      "min": -1.0,
+      "max": 0.999969482421875,
+      "center": 0.0,
+      "sign": -1
+    },
+    "yaw": {
+      "axis": 0,
+      "min": -1.0,
+      "max": 0.999969482421875,
+      "center": 3.0517578125e-05,
+      "sign": 1
+    },
+    "throttle": {
+      "axis": 2,
+      "min": -1.0,
+      "max": 0.999969482421875,
+      "center": -0.0048828125,
+      "sign": 1
+    }
+  },
+  "buttons": {
+    "arm": {
+      "kind": "axis",
+      "index": 4,
+      "active": 0.999969482421875,
+      "inactive": -1.0
+    },
+    "mode": {
+      "kind": "axis",
+      "index": 6,
+      "active": 0.999969482421875,
+      "inactive": -1.0
+    }
+  }
+}

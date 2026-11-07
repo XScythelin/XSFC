@@ -1,0 +1,5 @@
+{
+  "mass_kg": 0.65,
+  "wheelbase_mm": 225.0,
+  "warning": "Explicit development assumptions, not measured user hardware. No motor/XSFC adapter attached."
+}

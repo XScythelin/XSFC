@@ -10,3 +10,6 @@ __pycache__/
 *.py[cod]
 /sitl/build/
 /sitl/.venv/
+
+# Webots editor state is local to each workstation.
+*.wbproj

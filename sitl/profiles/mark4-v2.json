@@ -1,0 +1,16 @@
+{
+  "name": "Mark4 V2 5-inch / B&C 4S / XING-E Pro 2207 2450KV",
+  "frame": {"name": "Mark4 V2", "layout": "QUADX", "wheelbase_m": null},
+  "mass_kg": null,
+  "battery": {
+    "manufacturer": "B&C", "chemistry": "LiPo", "cells": 4,
+    "capacity_mah": 2200, "nominal_voltage_v": 14.8,
+    "full_voltage_v": 16.8, "energy_wh": 32.56, "label_discharge_c": 120,
+    "internal_resistance_ohm": null
+  },
+  "motors": {"name": "iFlight XING-E Pro 2207", "kv": 2450, "rated_cells": [2, 4]},
+  "propellers": {"name": "Gemfan Hurricane V2 51466", "diameter_in": 5.1},
+  "imu": {"name": "ICM42688", "hardware_bus": "SPI", "position_m": [0, 0, 0], "alignment": "body_aligned"},
+  "unidentified": ["mass_kg", "wheelbase_m", "inertia", "motor_positions", "thrust_curve", "motor_time_constant", "battery_resistance"],
+  "status": "User component specification only; not a calibrated physics model. SPI and P4 CPU timing are not emulated."
+}

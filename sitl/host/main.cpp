@@ -216,6 +216,20 @@ int main(int argc, char** argv) {
         if (rangeEndpoint) std::printf("%.9g %.9g %d %d %d ", model.state.altitude.rangeHeight,
             model.state.altitude.rangeVario, model.rangefinderReadyForHold() ? 1 : 0,
             model.state.altitude.rangeSource ? 1 : 0, model.state.altitude.sensorLost ? 1 : 0);
+        if (std::getenv("XSFC_HOST_YAW_DIAGNOSTICS")) {
+          const auto& pid = model.state.innerPid[2];
+          std::printf("%.9g %.9g %.9g %.9g %.9g %.9g %.9g %d ",
+              model.state.input.ch[2], model.state.setpoint.rate[2],
+              pid.pTerm, pid.iTerm, pid.dTerm, pid.fTerm,
+              model.state.output.ch[2], pid.outputSaturated ? 1 : 0);
+          for (int axis = 0; axis < 2; ++axis) {
+            const auto& p = model.state.innerPid[axis];
+            std::printf("%.9g %.9g %.9g %.9g %.9g %.9g %.9g %d ",
+                model.state.input.ch[axis], model.state.setpoint.rate[axis],
+                p.pTerm, p.iTerm, p.dTerm, p.fTerm,
+                model.state.output.ch[axis], p.outputSaturated ? 1 : 0);
+          }
+        }
         if (receiverEndpoint) std::printf("%u %u %d %d ", model.state.mode.mask,
             model.state.mode.armingDisabledFlags, static_cast<int>(model.state.failsafe.phase),
             model.state.input.channelsValid ? 1 : 0);
